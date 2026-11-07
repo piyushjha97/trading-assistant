@@ -1,0 +1,55 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+.secrets/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python environments, bytecode, test and tooling caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build output and generated packages
+build/
+dist/
+*.egg-info/
+*.whl
+*.zip
+
+# JavaScript dependencies and build caches
+node_modules/
+.next/
+.vite/
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor and local tooling state
+.idea/
+.vscode/
+.cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+cdk.out/
+.serverless/
