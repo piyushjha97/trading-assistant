@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 17821)
-Total output lines: 1081
-
 # Engineering Design Document (EDD)
 ## AI-Assisted Indian Equity Market Analysis Platform
 
@@ -350,7 +347,331 @@ class MarketDataProvider(Protocol):
 The final interface may differ after review. It should support:
 - Instrument lookup/resolution or a separate instrument master service.
 - Historical candle retrieval.
-- P…5821 tokens truncated…Idempotency-Key` for client retries. Persist request identity so a retried request does not accidentally trigger duplicate paid LLM calls; define replay behavior and expiration.
+- Provider capability discovery.
+- Rate-limit and entitlement errors.
+- Data-source metadata and request identifiers.
+- Explicit distinction between unsupported interval, no data, authentication failure, throttling and provider outage.
+
+Potential adapters (not committed; verify all claims against current official documentation and contract terms):
+- Angel One SmartAPI.
+- Upstox.
+- TejHQ (potentially more suitable for EOD data depending on current product terms/capabilities).
+- Other providers after official documentation and terms review.
+
+### 7.2 Provider capability model
+
+Represent, where discoverable:
+- Exchanges and instrument types.
+- Supported intervals.
+- Maximum historical lookback.
+- Whether volume and open interest are supplied.
+- Whether data is delayed, real-time or end-of-day.
+- Authentication and token-renewal requirements.
+- Rate limits/quotas.
+- Entitlement and account requirements.
+- Known session/adjustment semantics.
+- Usage, storage and redistribution restrictions.
+
+Do not assume all providers have equivalent data quality or rights.
+
+### 7.3 Canonical data model
+
+The final schema must preserve source semantics rather than erase provider differences. At minimum, a normalized candle/batch must carry:
+- Canonical `listing_id`, exchange, segment and instrument identity.
+- Timeframe and explicit `bar_start_at` / `bar_end_at` in UTC, plus exchange timezone (`Asia/Kolkata`) and original provider timestamp/convention.
+- OHLC values represented with a documented exact source representation (raw decimal text or scaled integer/tick representation) and a documented calculation representation. Avoid uncontrolled float round-tripping; round only for display using instrument tick size.
+- Volume with provider-defined units/semantics; do not assume all providers mean the same thing.
+- `is_complete`, `is_partial_session_bar`, `published_at`/provider availability where available, retrieval timestamp and provider batch ID.
+- Adjustment basis (`unadjusted`, `split_adjusted`, `corporate_action_adjusted`, `unknown`) and adjustment as-of/version where supplied.
+- Source provider, provider instrument key and mapping version.
+
+Illustrative shape (not final code):
+
+```python
+class Candle(BaseModel):
+    listing_id: str
+    timeframe: str
+    bar_start_at: datetime  # UTC
+    bar_end_at: datetime    # UTC
+    open_raw: str
+    high_raw: str
+    low_raw: str
+    close_raw: str
+    volume: int | None
+    is_complete: bool
+    is_partial_session_bar: bool
+    adjustment_basis: str
+    source_provider: str
+    provider_batch_id: str
+```
+
+The numeric calculation layer converts raw values through a single documented conversion path and explicit tolerance rules. Store instrument tick size and price scale effective at the analysis time. `Security`, `Listing` and `ProviderInstrumentMap` are separate concepts; symbol/identifier mappings are effective-dated. ISIN may be an attribute but must not be the sole identity key.
+
+### 7.3.1 Candle boundary and as-of policy
+
+- Use one `as_of` instant per analysis run.
+- Timeframes are session-anchored to the applicable exchange calendar, not arbitrary wall-clock multiples.
+- Every candle has explicit start/end boundaries. Provider timestamp conventions are mapped and original values retained for diagnostics.
+- A candle is eligible for closed-candle analysis only if provider completion evidence and the configured latency buffer show it was available by `as_of`; nominal wall-clock boundary alone is insufficient.
+- Opening/closing partial intervals are represented explicitly and are not silently merged into full-length bars.
+- NSE and BSE calendars are independent, versioned inputs. Special sessions, holidays, auctions and exceptional trading days must be represented. Calendar source and version are recorded on each report.
+- Daily/weekly candles follow a documented exchange-session convention; do not assume a daily candle is complete solely because the local date changed.
+
+### 7.3.2 Corporate actions
+
+Each analysis must use a single explicit adjustment basis across all selected timeframes. Record provider adjustment semantics, adjustment as-of time/version and any known corporate actions affecting the lookback. Never mix adjusted and unadjusted candles in one calculation. If the provider cannot establish a trustworthy basis for an affected window, mark the data quality as degraded or fail the affected analysis; suppress price levels/indicators that would be misleading. Preserve the exact normalized input snapshot where permitted.
+
+### 7.4 Data normalization and validation
+
+Validation should cover:
+- Timestamp parsing and timezone normalization.
+- Duplicate candles and out-of-order records.
+- OHLC invariants (`high >= max(open, close)`, `low <= min(open, close)`, `high >= low`).
+- Negative or implausible prices/volume.
+- Missing intervals and market-session gaps.
+- Partial/current candle detection.
+- Provider pagination and truncation.
+- Corporate-action effects, where applicable.
+- Empty responses and provider inconsistencies.
+
+Indian equity session rules must be exchange-calendar aware, not hardcoded as a simple weekday/time check. Normal NSE equity trading is commonly 09:15–15:30 IST, but holidays, special sessions, auctions and changes must be handled through a maintained calendar/source. Verify the exact rules and data-provider semantics before implementation.
+
+### 7.5 Candle aggregation
+
+If the provider lacks a requested timeframe:
+- Aggregate only from a smaller interval with sufficient coverage.
+- Align boundaries to exchange sessions and the intended timeframe convention.
+- Define treatment of opening/closing partial intervals.
+- Preserve volume aggregation semantics.
+- Do not aggregate across sessions unless the timeframe definition explicitly requires it.
+- Mark incomplete aggregates.
+- Test daylight/timezone and holiday boundaries even if the exchange currently uses IST.
+
+### 7.6 Data retention, snapshots and caching
+
+The owner has selected candle snapshots for historical charts and analysis reproducibility. V1 therefore defines two persistence tiers:
+
+- **Tier A — always required:** immutable analysis request/configuration snapshot; exact typed evidence package supplied to the LLM; prompt/template version and rendered prompt where lawful; raw structured LLM response; validator findings and any deterministic downgrade/diff; provider, retrieval time, requested/actual range, candle counts, quality summary, adjustment basis, calendar version, content hash; engine/indicator/catalog versions; model/provider metadata and stage timings.
+- **Tier B — candle snapshot, rights-gated:** the compact normalized candle window actually used for calculations and chart display, per listing/timeframe, stored per analysis rather than as an unrestricted market-data warehouse. Store snapshot schema/version, checksum, provider rights/policy ID, retention expiry and deletion status. Prefer compressed columnar/object storage for larger payloads, with PostgreSQL metadata and access control.
+
+**Hard gate:** do not persist, display historically, export, or send snapshots to another service unless the selected provider's current contract and plan permit that specific use. Verify rights for storage duration, chart display, derived data, backups, user access, third-party LLM processing (where relevant), deletion and post-termination retention. If only short retention is permitted, enforce TTL deletion. If retention is prohibited, disable Tier B for that provider and clearly mark historical chart replay as unavailable; the provider may be rejected if this fails the product requirement.
+
+Snapshots are immutable per report. A new provider fetch creates a new snapshot/version; it must not silently replace the data associated with an old report. Recompute/replay must reference the original snapshot and versioned calculation code. A hash alone is not a substitute for a snapshot.
+
+Caching is deferred. If introduced later, cache entries must be scoped by provider/account entitlement, instrument, interval, adjustment basis, session/calendar version and freshness policy; cached data inherits the same provider usage restrictions and expiry.
+
+## 8. Quantitative analysis engine
+
+### 8.1 Principles
+
+- All numerical indicator and risk calculations occur in deterministic code.
+- LLM receives structured results, not responsibility for calculating RSI, ATR, MACD or price levels from raw candles.
+- Each calculation must be independently testable against known fixtures/reference implementations.
+- Store indicator configuration and implementation version with the report. Persist the normalized candle snapshot used by the run when licensed.
+- Avoid lookahead: a calculation at time `t` may only use information available at or before `t`.
+- Define warm-up periods, missing-data behavior and NaN handling explicitly.
+
+### 8.2 Suggested internal layers
+
+- `indicators/`: pure indicator functions and typed output.
+- `patterns/`: explicit pattern definitions and detection.
+- `market_structure/`: swings, support/resistance, BOS/CHOCH, regime features.
+- `timeframes/`: timeframe-specific calculation and alignment.
+- `synthesis/`: compare signals and conflicts across timeframes.
+- `gates/`: deterministic, versioned eligibility and setup checklist; no scalar score in V1.
+- `risk/`: deterministic trade geometry and risk/reward calculations.
+
+### 8.3 Multi-timeframe synthesis
+
+- Compute evidence independently per timeframe.
+- Align observations to a common analysis timestamp.
+- Distinguish closed higher-timeframe candles from partial higher-timeframe candles.
+- Report conflicts rather than hiding them.
+- Define explicit rules for timeframe hierarchy and signal weighting.
+- Avoid arbitrary indicator voting or double-counting correlated indicators.
+- Preserve both supporting and contradictory evidence.
+
+### 8.4 Indicator correctness
+
+For each indicator, specify formula/reference, parameters/defaults, input timeframe/history, warm-up, output scale, edge cases, missing values, unit tests and version ID. V1 should deliberately narrow the catalog to a small set proven against the selected provider's real candles. Proposed starting set: OHLCV evidence, SMA/EMA, RSI and ATR; add MACD or VWAP only if provider interval/volume semantics and test coverage justify them. Defer the broad catalog in v0.1 until after the first end-to-end pipeline works.
+
+## 9. AI reasoning and orchestration
+
+### 9.1 LLM responsibilities
+
+The LLM may:
+- Interpret structured quantitative findings.
+- Explain agreement/conflict across timeframes.
+- Describe plausible bullish, bearish and neutral scenarios.
+- Identify missing evidence and risks.
+- Formulate a conditional thesis and candidate levels when supported by supplied data.
+- Explain why WAIT or NO_TRADE is appropriate.
+- Answer follow-up questions grounded in the report and its evidence.
+
+The LLM must not:
+- Invent prices, candle values, indicator values or market events.
+- Claim a probability that has not been calibrated.
+- Override data-quality failures or deterministic risk constraints.
+- Place orders.
+- Treat natural-language user instructions as permission to bypass validation or safety controls.
+
+### 9.2 Provider-neutral interface
+
+Illustrative contract:
+
+```python
+class TradingReasoningProvider(Protocol):
+    async def analyze(
+        self,
+        context: "TradingAnalysisContext",
+    ) -> "TradingAnalysis":
+        ...
+```
+
+Implement provider adapters behind a factory/registry. The application should record model/provider identifiers and generation metadata. Avoid leaking provider-specific request/response objects into domain modules.
+
+### 9.3 Structured output
+
+Use a typed schema (for example Pydantic) with:
+- Instrument and analysis reference.
+- Verdict, directional bias and actionability (with reason).
+- Horizon/trading style and segment/horizon eligibility decision.
+- Thesis.
+- Entry zone (optional).
+- Stop/invalidation (optional).
+- Targets (optional list).
+- Supporting and contradicting evidence IDs.
+- Risks and alternative scenarios.
+- Explanation and assumptions.
+- Qualitative LLM assessment.
+- Selected candidate price-level IDs and evidence references only.
+- Named gate checklist with gate IDs, status and reasons.
+
+Parsing failures should have bounded repair/retry behavior. A malformed model response must not be rendered as a valid trade plan.
+
+### 9.4 Confidence and setup gates
+
+V1 does not expose an aggregate numeric setup-quality score or a user-configurable score threshold. Instead, a deterministic, versioned checklist reports named gates as `PASS`, `FAIL` or `UNKNOWN`, each with evidence references and a reason. Mandatory gates include clean/eligible data, sufficient indicator warm-up, supported direction × segment × horizon, no unresolved critical timeframe conflict, liquidity/volume sufficiency where measurable, stop-distance sanity and minimum requested risk/reward. The application may show `x of y gates passed` as a checklist count, but must not call it confidence or probability.
+
+LLM qualitative assessment is explanatory only. Calibrated probability is deferred until a statistically defensible labeled dataset, chronological out-of-sample evaluation, calibration analysis and monitoring exist. No 90/95/99% threshold is exposed in V1.
+
+### 9.5 Orchestration: plain typed Python pipeline
+
+V1 uses ordinary typed Python stage functions coordinated by an `AnalysisPipeline` / application service. The workflow is predominantly linear: resolve instrument, preflight capability, fetch, normalize/validate, compute evidence, invoke one LLM, validate, persist. This does not justify LangGraph or Google ADK in the initial release.
+
+Use explicit stage inputs/outputs, a `RunContext` (`as_of`, request/owner IDs, correlation ID, deadline/budget, provider policy) and per-stage timing/outcome records. Parallelize independent timeframe computations only where bounded and safe. Add a durable workflow engine only if future requirements demonstrate human approval, durable checkpoints, complex branching, long-running jobs or multi-agent routing that cannot be handled cleanly by the pipeline.
+
+### 9.6 Model evaluation
+
+Benchmark candidate models using the same fixed cases and prompts. Evaluate:
+- Schema compliance.
+- Evidence-grounded reasoning.
+- Multi-timeframe consistency.
+- Correct use of supporting/contradictory evidence.
+- Invalid or invented price levels.
+- Appropriate WAIT/NO_TRADE behavior.
+- Risk/reward correctness (with deterministic validator as final authority).
+- Hallucination rate.
+- Repeatability/variance.
+- Latency, token usage and cost.
+
+Build a versioned evaluation set. Avoid selecting a model based solely on generic benchmarks or a few anecdotal examples. Future outcome-based evaluation must use chronological train/validation/test splits and guard against lookahead and survivorship bias.
+
+---
+
+## 10. Direction eligibility and deterministic risk validation
+
+The validator is a hard boundary between model output and user-visible trade plans. It performs two distinct checks: (1) whether the requested direction is actionable for this instrument/segment/horizon, and (2) whether the proposed levels are geometrically and evidentially valid.
+
+### 10.1 Direction × segment × horizon policy
+
+Represent eligibility as a versioned policy table, not scattered `if` statements. Conceptual dimensions: exchange, instrument type, segment/product, direction, holding horizon, and where required the provider/broker capability and applicable rules. Each combination returns one of:
+- `ACTIONABLE`: the app may produce a conditional plan if evidence and risk gates pass.
+- `BIAS_ONLY`: bullish/bearish analysis is allowed, but no actionable plan is emitted.
+- `UNSUPPORTED`: reject the requested action or return a clear unsupported result.
+
+For V1, cash-equity SHORT must not be assumed actionable for swing or positional holding. Intraday short may be considered only after the exact segment, broker/product access and applicable rules are verified. Where no valid short route exists, preserve `directional_bias=BEARISH`, set `actionability=BIAS_ONLY`, and return `WAIT` or `NO_TRADE` with a reason such as `short_not_actionable_for_segment_horizon`. Do not imply that a bearish view authorizes borrowing, delivery shorting or order execution. Derivatives are not automatically included merely because they could enable bearish exposure; they require separate scope, data and compliance approval.
+
+LONG eligibility is also subject to instrument status, segment and data availability. The policy table and its source/version are persisted with each report. Legal/regulatory applicability and broker permissions must be verified before enabling a combination.
+
+### 10.2 Price-plan validation
+
+Checks include:
+- Entry, stop and targets are numeric, finite, within plausible instrument bounds and aligned to tick-size rules.
+- LONG: stop below entry; targets above entry. SHORT: stop above entry; targets below entry.
+- Risk distance is non-zero; reward/risk is calculated by deterministic code.
+- Targets/stops are ordered consistently and reference supplied candidate-level/evidence IDs.
+- Every price level is selected from deterministic candidate levels supplied to the LLM or otherwise supported by explicit evidence. Prefer LLM selection among candidate IDs rather than free-form price invention.
+- No level is accepted if it contradicts the data snapshot/current close without an explicit, validated rationale.
+- Requested minimum R:R is satisfied or plan is downgraded to WAIT/NO_TRADE.
+- No actionable plan is emitted when required data is stale, incomplete, invalid, insufficient or direction-ineligible.
+- Validator output is structured: `ACCEPTED`, `DOWNGRADED`, `REJECTED`; record every finding and any deterministic change.
+
+No execution occurs in V1. These checks validate an analytical scenario, not order placement, guaranteed fills or broker-specific execution behavior.
+
+## 11. Persistence and data model
+
+PostgreSQL is the provisional relational store. A separate object-storage bucket may hold compressed candle snapshots if the selected host and provider contract permit it. Object access must be private and owner-scoped; do not expose bucket URLs publicly.
+
+### 11.1 Candidate entities
+
+- `user` / `identity`: authenticated owner identity.
+- `instrument_security`: canonical security identity and issuer-level metadata.
+- `instrument_listing`: exchange, segment/series, symbol, tick size, currency, status and effective dates.
+- `instrument_alias`: symbol/name history with valid-from/to timestamps.
+- `provider_instrument_map`: provider-specific instrument key and mapping version/effective dates.
+- `analysis_profile`: saved configuration and owner ID.
+- `analysis_request` / `analysis_run`: request/config snapshot, owner ID, status/result, start/end, correlation ID and stage timings. In V1, run lifecycle is completed within one synchronous HTTP request; persistence may still record `RUNNING` during execution for diagnostics, but there is no public polling/job API.
+- `data_provenance`: provider, plan/entitlement, retrieval time, requested/actual range, counts, quality summary, adjustment basis, calendar version, content hash and rights-policy ID.
+- `candle_snapshot`: snapshot metadata, storage pointer or inline payload, schema/version, checksum, expiry and deletion status.
+- `analysis_evidence`: typed per-timeframe findings, candidate price levels and gate outcomes.
+- `analysis_report`: directional bias, actionability, verdict, thesis, plan, explanation and validation status.
+- `model_invocation`: provider/model, prompt version, generation parameters, token/cost/latency metadata and structured response.
+- `chat_session` / `chat_message`: report-scoped conversation, owner ID and report references.
+- `retention_policy` / `deletion_audit`: provider rights, expiry and verified deletion records.
+
+### 11.2 Persistence and tenancy principles
+
+- Every user-owned row is scoped to an owner/tenant ID; every read/write query enforces that scope server-side.
+- V1 may expose only one owner, but identity and ownership checks are still required for hosted deployment.
+- Save immutable configuration, evidence, prompt/model metadata and validator findings with each report.
+- Save the normalized candle snapshot used for each report only when permitted. Snapshot access, export, backup and deletion obey the same rights policy.
+- Do not store API secrets in report tables or logs. Store references to secret-manager entries, not secret values.
+- Define retention and deletion for reports, chat, prompts, snapshots, backups and user credentials. A deletion request must cascade or tombstone related objects according to law/contract and leave only the minimum audit record permitted.
+- Use migrations, schema versioning, database encryption at rest and encrypted backups.
+
+### 11.3 Reproducibility levels
+
+- **Auditability (mandatory):** reconstruct what configuration, evidence, model/prompt, provider metadata, validator and policy versions were used.
+- **Computational replay (target where permitted):** rerun deterministic calculations from the exact normalized candle snapshot and versioned engine.
+- **LLM text replay (best effort only):** the same model/prompt may produce different prose over time; persist the original structured response and generation metadata. Do not promise bit-for-bit generation replay.
+
+A content hash detects changes but cannot reconstruct input data. If provider terms prohibit snapshots, retain Tier A only and explicitly downgrade the historical chart/replay promise for that provider.
+
+## 12. API design (synchronous V1)
+
+All routes require an authenticated session. Use owner-scoped authorization for every resource. Exact payloads remain subject to OpenAPI/schema finalization.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/v1/instruments` | Search supported instruments/listings |
+| GET | `/api/v1/instruments/{listing_id}` | Listing details |
+| GET | `/api/v1/market-data/capabilities` | Current provider/plan capability summary |
+| GET | `/api/v1/indicators` | Supported indicator catalog and parameter schemas |
+| GET | `/api/v1/analysis-profiles` | List owner profiles |
+| POST | `/api/v1/analysis-profiles` | Create/update a profile |
+| POST | `/api/v1/analyses` | Execute analysis synchronously and return completed report |
+| GET | `/api/v1/reports/{report_id}` | Retrieve owner-scoped saved report |
+| GET | `/api/v1/reports/{report_id}/candles` | Retrieve permitted retained chart snapshot |
+| POST | `/api/v1/chat/sessions` | Create report-scoped chat session |
+| POST | `/api/v1/chat/sessions/{session_id}/messages` | Ask a report-grounded question synchronously |
+
+### 12.1 Synchronous lifecycle and limits
+
+- `POST /analyses` does not return `202 Accepted` or a job ID for later polling in V1. It returns the completed report on success.
+- The server enforces request deadlines, provider/LLM timeouts, maximum lookback, maximum intervals, indicator count, bounded parallelism and an overall cost budget.
+- If a request cannot complete within the configured synchronous budget, return a typed timeout/degraded error with a correlation ID. Do not silently continue as a background task.
+- Use an `Idempotency-Key` for client retries. Persist request identity so a retried request does not accidentally trigger duplicate paid LLM calls; define replay behavior and expiration.
 - Retry only transient, idempotent provider reads, respecting `Retry-After`; do not retry auth, entitlement, invalid request or no-data errors. Bound retries and total time.
 - Return clear typed errors for unsupported interval/lookback, entitlement failure, rate limit, provider outage, invalid/stale data, model failure and internal validation failure.
 - A future async job API may be added if real latency/timeout measurements justify it; it is not part of V1.
