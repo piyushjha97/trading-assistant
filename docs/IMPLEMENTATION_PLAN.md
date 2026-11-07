@@ -2,30 +2,31 @@
 
 - **Design authority:** [EDD v0.2](EDD-v0.2.md). This plan does not change its decisions.
 - **V1 target:** a small, hosted, single-owner market-analysis app for NSE/BSE equities.
+- **Market-data scope:** current-day intraday candles for on-demand analysis; fetch only the prior bars required to warm up the selected indicators. Do not build a historical data warehouse.
 - **Cost constraint:** use a provider with free access for the V1 market-data needs. Do not add a paid fallback unless the owner approves it.
 - **Shape:** one typed Python application, synchronous requests, one market-data provider and one LLM. No orders, scheduled jobs, queues, microservices, LangGraph or Google ADK.
-- **Initial provider to try:** Upstox, provisionally. Current official docs describe a free, read-only Analytics Token and Historical Data APIs. This is a first connectivity candidate, not a claim that the owner's account is eligible or that candle snapshots may be retained.
+- **Initial provider to try:** Upstox, provisionally. Current official docs describe a free, read-only Analytics Token, current-day intraday candles and live quote/streaming APIs. This is a first connectivity candidate, not a claim that the owner's account is eligible or that candle snapshots may be retained.
 - **Current status:** no provider connectivity test has passed yet. Do not use fabricated or synthetic market candles in the app.
 
 ## How to keep this small
 
-Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it works for the minimum V1 need and its terms allow the required use, proceed. Keep the app simple and add operational detail when the chosen host is known. Use actual provider responses for market-data integration and acceptance checks; never substitute invented candle values.
+Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it works for the minimum V1 need and its terms allow the required use, proceed. For V1, fetch current-day candles when an analysis is requested. Add a continuous WebSocket stream only if the UI needs prices that update between requests. Keep the app simple and use actual provider responses for market-data checks; never substitute invented candle values.
 
 ## Phase 0 — Pick and verify a free market-data provider
 
-The EDD names Upstox, Angel One SmartAPI and TejHQ as possible providers, but selects none. To keep V1 simple, try Upstox first rather than comparing every candidate. Its current official documentation describes a free, read-only Analytics Token that can call Historical Data APIs. If this does not work for the owner's account or V1 data needs, return with the specific failure before adding another provider.
+The EDD names Upstox, Angel One SmartAPI and TejHQ as possible providers, but selects none. To keep V1 simple, try Upstox first rather than comparing every candidate. Its current official documentation describes a free, read-only Analytics Token that supports current-day intraday candles and live market-data APIs. If this does not work for the owner's account or V1 data needs, return with the specific failure before adding another provider.
 
 | Work | Depends on | Result and check |
 |---|---|---|
-| Confirm the minimum V1 data need: supported NSE/BSE listings, a small set of candle intervals and lookback needed by the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of required symbols, intervals and lookback. Drop unsupported options from V1 rather than building around hypothetical capabilities. |
-| Create an Upstox Analytics Token for the owner's account and make one authenticated Historical Candle V3 request for a real NSE/BSE instrument and date. | Minimum data need; owner has an Upstox account/token | A recorded result: request succeeded and returned real candles, or the exact HTTP/API error and next action. Never put the token in chat, source control, screenshots or logs. |
-| Check whether the applicable free account terms allow the V1 use: processing, private display and the EDD's per-report normalized candle snapshot, including storage and deletion. | Provider terms | Record the relevant terms or written provider answer. If snapshot rights are unclear, pause snapshot persistence and ask the owner; free API access does not itself establish retention rights. |
+| Confirm the minimum V1 data need: supported NSE/BSE listings, an intraday interval and enough bars for the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of symbols and intervals. Limit old history to indicator warm-up; do not backfill a large history. |
+| Create an Upstox Analytics Token for the owner's account and make one authenticated Intraday Candle V3 request for a real NSE/BSE instrument while its market is open. Check the latest candle timestamp and whether the last candle is complete. | Minimum data need; owner has an Upstox account/token | A recorded result: request succeeded and returned real same-day candles, or the exact HTTP/API error and next action. Never put the token in chat, source control, screenshots or logs. |
+| Check whether the applicable account terms allow the V1 use: processing, private display and the EDD's per-report normalized candle snapshot, including storage and deletion. | Provider terms | Record the relevant terms or written provider answer. If snapshot rights are unclear, pause snapshot persistence and ask the owner; free API access does not itself establish retention rights. |
 
-**Phase 0 is done when:** the Upstox test returns real candles for the minimum V1 request and the required use/snapshot rights are clear, or the exact blocker is presented to the owner. Do not implement a second provider just because the first test fails. The backend shell can proceed after implementation approval, but live data handling follows the successful connectivity and terms checks.
+**Phase 0 is done when:** the Upstox test returns real same-day candles for the minimum V1 request and the required use/snapshot rights are clear, or the exact blocker is presented to the owner. Do not implement a second provider just because the first test fails. A same-day-only V1 initially supports intraday analysis; daily/swing analysis needs enough prior candles to warm up its indicators. The backend shell can proceed after implementation approval, but live data handling follows the successful connectivity and terms checks.
 
 ### Official research starting points
 
-Use these official starting points: Upstox's [Analytics Token](https://upstox.com/developer/api-documentation/analytics-token/) guide says the token is free and read-only, and the [Historical Candle V3](https://upstox.com/developer/api-documentation/v3/get-historical-candle-data/) page documents its candle endpoint and request limits. NSE publishes a separate [Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy). Check account-specific terms before storing or displaying data. API documentation and a successful response do not by themselves establish snapshot-retention rights. References checked 2026-11-07; recheck when testing.
+Provider comparison from current official sources: **Upstox** is the first choice to test because its free read-only Analytics Token supports the current-day candle and live-data API categories; current-day intraday candles are available over REST, and continuous WebSocket feeds are available if needed. The WebSocket uses Protobuf, so defer it unless the UI needs continuous updates. **Angel One SmartAPI** also documents free live WebSocket/quote access, but its documented login uses account credentials plus TOTP and the session lasts until midnight. **TejHQ is not suitable for live/same-day-in-session V1:** it documents end-of-day data, normally available the next morning. Sources: [Upstox Analytics Token](https://upstox.com/developer/api-documentation/analytics-token/), [Upstox Intraday Candle V3](https://upstox.com/developer/api-documentation/v3/get-intra-day-candle-data/), [Upstox live feed V3](https://upstox.com/developer/api-documentation/v3/get-market-data-feed/), [Angel One SmartAPI](https://smartapi.angelone.in/docs) and [FAQ](https://smartapi.angelone.in/faq), [TejHQ API reference](https://tejhq.dev/docs) and [data terms](https://tejhq.dev/data-terms). NSE publishes a separate [Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy). Check account-specific terms before storing or displaying data: API documentation and a successful response do not by themselves establish snapshot-retention rights. Sources checked 2026-11-07; recheck when testing.
 
 ## Phase 1 — Backend foundation and API shell
 
@@ -43,7 +44,7 @@ Use these official starting points: Upstox's [Analytics Token](https://upstox.co
 
 **Depends on:** Phase 1; Phase 0 provider capability and snapshot-rights checks for any live or retained data.
 
-**Work:** Connect one provider adapter to Upstox, retrieve real candles, then add only the instrument lookup, request limits/timeouts, normalization and validation needed for the observed responses. Store exact normalized candles only under the approved retention policy. Avoid building a provider framework or generalized data warehouse.
+**Work:** Connect one provider adapter to Upstox's current-day intraday candle endpoint; retrieve real candles on each analysis request. Add only the instrument lookup, request limits/timeouts, normalization and validation needed for the observed responses. Store exact normalized candles only under the approved retention policy. Defer a persistent streaming connection unless the UI needs continuous updates. Avoid building a provider framework or generalized data warehouse.
 
 **Deliverable:** a tested backend endpoint/service can retrieve and validate supported candles, with source and time-range recorded.
 
@@ -101,7 +102,7 @@ Use these official starting points: Upstox's [Analytics Token](https://upstox.co
 
 ## Decisions to make when needed
 
-- **Before live provider integration:** named free provider/account, supported intervals/lookback and data/snapshot rights.
+- **Before live provider integration:** confirm the Upstox account/token works, choose supported intraday intervals, decide the minimum indicator warm-up bars, and confirm data/snapshot rights.
 - **Before storing user reports:** hosting choice, region, authentication/session approach and retention periods.
 - **Before sending evidence to an LLM:** model/provider, applicable data terms and bounded cost/latency.
 - **Before actionable LONG/SHORT output:** supported segment × horizon × direction rules, especially cash-equity SHORT.
