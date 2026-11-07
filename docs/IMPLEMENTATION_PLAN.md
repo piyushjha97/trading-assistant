@@ -4,48 +4,48 @@
 - **V1 target:** a small, hosted, single-owner market-analysis app for NSE/BSE equities.
 - **Cost constraint:** use a provider with free access for the V1 market-data needs. Do not add a paid fallback unless the owner approves it.
 - **Shape:** one typed Python application, synchronous requests, one market-data provider and one LLM. No orders, scheduled jobs, queues, microservices, LangGraph or Google ADK.
-- **Current status:** planning only. Application work starts after the owner's approval.
+- **Initial provider to try:** Upstox, provisionally. Current official docs describe a free, read-only Analytics Token and Historical Data APIs. This is a first connectivity candidate, not a claim that the owner's account is eligible or that candle snapshots may be retained.
+- **Current status:** no provider connectivity test has passed yet. Do not use fabricated or synthetic market candles in the app.
 
 ## How to keep this small
 
-Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Use a small provider spike to choose a workable free source; keep the app simple and add operational detail when the chosen host is known. Use synthetic fixtures for development until live provider access and terms are confirmed.
+Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it works for the minimum V1 need and its terms allow the required use, proceed. Keep the app simple and add operational detail when the chosen host is known. Use actual provider responses for market-data integration and acceptance checks; never substitute invented candle values.
 
 ## Phase 0 — Pick and verify a free market-data provider
 
-The EDD names Upstox, Angel One SmartAPI and TejHQ as possible providers, but selects none. Compare those candidates using their current official material and account terms. Do not build a large vendor scorecard.
+The EDD names Upstox, Angel One SmartAPI and TejHQ as possible providers, but selects none. To keep V1 simple, try Upstox first rather than comparing every candidate. Its current official documentation describes a free, read-only Analytics Token that can call Historical Data APIs. If this does not work for the owner's account or V1 data needs, return with the specific failure before adding another provider.
 
 | Work | Depends on | Result and check |
 |---|---|---|
-| Confirm the minimum V1 data need: supported NSE/BSE listings, a small set of candle intervals and the lookback needed by the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of required symbols/intervals/lookbacks. Drop unsupported options from V1 rather than building around hypothetical provider capabilities. |
-| Check which candidate offers free access for the owner's account and supports that exact data need. Check current endpoint status, authentication, limits and terms using official provider sources. | Minimum data need | One recommended candidate, with unsupported items clearly listed. No price, access or capability is assumed from an API page alone. |
-| Make a small, non-production request using the intended account. Inspect timestamps, OHLCV, gaps, session boundaries and one historical corporate-action example if the selected history includes one. | Candidate check; authorized account | A short spike note showing working requests and data limitations. Do not keep or commit raw responses unless the terms allow it. |
-| Confirm that the free plan permits the V1 use: processing, private display and the EDD's per-report normalized candle snapshot, including its storage and deletion. | Provider terms | Record the applicable terms or written provider answer. If snapshot rights are not clear, pause that provider-backed feature and ask the owner; do not treat free access as a retention license. |
+| Confirm the minimum V1 data need: supported NSE/BSE listings, a small set of candle intervals and lookback needed by the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of required symbols, intervals and lookback. Drop unsupported options from V1 rather than building around hypothetical capabilities. |
+| Create an Upstox Analytics Token for the owner's account and make one authenticated Historical Candle V3 request for a real NSE/BSE instrument and date. | Minimum data need; owner has an Upstox account/token | A recorded result: request succeeded and returned real candles, or the exact HTTP/API error and next action. Never put the token in chat, source control, screenshots or logs. |
+| Check whether the applicable free account terms allow the V1 use: processing, private display and the EDD's per-report normalized candle snapshot, including storage and deletion. | Provider terms | Record the relevant terms or written provider answer. If snapshot rights are unclear, pause snapshot persistence and ask the owner; free API access does not itself establish retention rights. |
 
-**Phase 0 is done when:** one free provider can meet the minimum V1 data need and the relevant use and snapshot rights are clear, or the exact blocker is presented to the owner. The app shell does not need to wait for every future product decision, but live provider integration and snapshot storage do.
+**Phase 0 is done when:** the Upstox test returns real candles for the minimum V1 request and the required use/snapshot rights are clear, or the exact blocker is presented to the owner. Do not implement a second provider just because the first test fails. The backend shell can proceed after implementation approval, but live data handling follows the successful connectivity and terms checks.
 
 ### Official research starting points
 
-The EDD's candidates remain candidates, not endorsements. Check current official documentation and account-specific terms during Phase 0: [Upstox Historical Candle V3](https://upstox.com/developer/api-documentation/v3/get-historical-candle-data/), [Angel One SmartAPI](https://smartapi.angelone.in/docs), and NSE's [Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy). Upstox marks its older [V2 historical-candle endpoint deprecated](https://upstox.com/developer/api-documentation/get-historical-candle-data/), so confirm the supported endpoint when testing. These links do not establish free access or data-retention rights.
+Use these official starting points: Upstox's [Analytics Token](https://upstox.com/developer/api-documentation/analytics-token/) guide says the token is free and read-only, and the [Historical Candle V3](https://upstox.com/developer/api-documentation/v3/get-historical-candle-data/) page documents its candle endpoint and request limits. NSE publishes a separate [Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy). Check account-specific terms before storing or displaying data. API documentation and a successful response do not by themselves establish snapshot-retention rights. References checked 2026-11-07; recheck when testing.
 
-## Phase 1 — Minimal app foundation
+## Phase 1 — Backend foundation and API shell
 
 **Depends on:** owner approval to begin implementation. Provider research can continue in parallel using the Phase 0 checklist.
 
-**Work:** Create the Python modular-monolith app, basic typed API, simple React/TypeScript UI, configuration, local development setup, PostgreSQL schema/migrations, and owner-only sign-in. Keep the project tooling conventional and limited to what the app needs.
+**Work:** Create the Python modular-monolith app, FastAPI shell, typed request/response contracts, configuration, local development setup, PostgreSQL schema/migrations, and owner-only authentication. Test the backend contracts, auth and error handling. Do not build the UI or fabricate market-data responses.
 
-**Deliverable:** a locally runnable, owner-only application shell using synthetic data.
+**Deliverable:** a locally runnable backend with documented API contracts and an owner-only auth boundary.
 
-**Acceptance check:** the app starts from documented steps; the owner can sign in; protected data is not available anonymously; health/status output contains no secrets; schema migrations work from an empty database.
+**Acceptance check:** the API starts from documented steps; request/response schemas and errors are tested; protected routes reject anonymous requests; health/status output contains no secrets; schema migrations work from an empty database.
 
-**Done when:** a small vertical slice runs locally and is ready to receive the selected provider integration.
+**Done when:** the backend shell and its first API tests run locally and are ready for the selected provider integration.
 
 ## Phase 2 — Basic market data
 
 **Depends on:** Phase 1; Phase 0 provider capability and snapshot-rights checks for any live or retained data.
 
-**Work:** Add one provider adapter, instrument lookup, request limits/timeouts, candle normalization and basic validation. Store the exact normalized candles used by a report only under the approved retention policy. Avoid building a provider framework or generalized data warehouse.
+**Work:** Connect one provider adapter to Upstox, retrieve real candles, then add only the instrument lookup, request limits/timeouts, normalization and validation needed for the observed responses. Store exact normalized candles only under the approved retention policy. Avoid building a provider framework or generalized data warehouse.
 
-**Deliverable:** one on-demand request can retrieve and validate supported candles, with source and time-range recorded.
+**Deliverable:** a tested backend endpoint/service can retrieve and validate supported candles, with source and time-range recorded.
 
 **Acceptance check:** supported requests return correctly ordered candles with explicit timestamps and OHLCV; unsupported, empty, malformed, stale or unauthorized responses produce clear errors; snapshots cannot be written when rights are unapproved and expire/delete according to the selected policy.
 
@@ -57,9 +57,9 @@ The EDD's candidates remain candidates, not endorsements. Check current official
 
 **Work:** Implement OHLCV evidence, SMA/EMA, RSI and ATR with clear warm-up and missing-data behavior. Add a small set of named analysis/risk gates and candidate price levels. Keep all calculations in ordinary typed Python functions.
 
-**Deliverable:** deterministic evidence and candidate levels from a candle fixture or permitted snapshot.
+**Deliverable:** tested backend services and API responses for deterministic evidence and candidate levels calculated from real provider candles or a permitted retained snapshot.
 
-**Acceptance check:** fixed inputs produce repeatable outputs; tests cover warm-up, missing/gapped data, candle boundaries and lookahead; failed or unknown mandatory gates cannot become an actionable plan; no scalar setup score or uncalibrated probability is produced.
+**Acceptance check:** calculations are checked against actual provider candles (retained as test data only if permitted); repeated analysis of the same permitted input produces repeatable outputs; candle boundaries and lookahead are checked; failed or unknown mandatory gates cannot become actionable; no scalar setup score or uncalibrated probability is produced. Do not generate synthetic candles for these checks.
 
 **Done when:** the analysis result is useful and explainable without calling an LLM.
 
@@ -69,23 +69,23 @@ The EDD's candidates remain candidates, not endorsements. Check current official
 
 **Work:** Send only the structured evidence needed for one report to one LLM. Require typed output that refers to supplied evidence and candidate levels. Validate the result in Python and return WAIT/NO_TRADE when data or actionability checks fail.
 
-**Deliverable:** one synchronous analysis request returns a validated report or a clear bounded error.
+**Deliverable:** a tested synchronous backend endpoint returns a validated report or a clear bounded error.
 
 **Acceptance check:** malformed, unsupported or invented model output is rejected or downgraded; invalid market data stops before the LLM call; duplicate requests do not cause duplicate paid model calls; no work continues in the background after a timeout.
 
 **Done when:** the report separates market data, computed evidence and LLM interpretation and records the versions used.
 
-## Phase 5 — Basic user workflow
+## Phase 5 — UI and end-to-end integration
 
-**Depends on:** Phases 1 and 4. Chart replay depends on permitted retained snapshots.
+**Depends on:** the Phase 4 report API and its contract tests are stable. Chart replay depends on permitted retained snapshots.
 
-**Work:** Add the instrument/timeframe form, report view, simple report history, charts from the report's own snapshot where allowed, and follow-up chat scoped to that report.
+**Work:** Build the React/TypeScript interface against the tested backend APIs: instrument/timeframe form, report view, simple report history, charts from the report's own snapshot where allowed, and follow-up chat scoped to that report. Keep UI logic thin; validation and analysis rules stay in the backend.
 
-**Deliverable:** the owner can request, inspect and revisit an analysis.
+**Deliverable:** an integrated UI lets the owner request, inspect and revisit an analysis through the backend APIs.
 
-**Acceptance check:** unsupported settings cannot be submitted; the report shows freshness, source and actionability; chart data matches the report snapshot; chat stays within that report and cannot place orders.
+**Acceptance check:** UI integration tests use the documented API contracts; unsupported settings cannot be submitted; the report shows freshness, source and actionability; chart data matches the report snapshot; chat stays within that report and cannot place orders.
 
-**Done when:** the main owner workflow works end to end without adding unrelated settings or features.
+**Done when:** the UI works end to end against the tested backend without duplicating business rules or adding unrelated features.
 
 ## Phase 6 — Deploy the private V1
 
