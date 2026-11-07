@@ -3,7 +3,7 @@
 ## Current design baseline
 
 - [Engineering Design Document v0.2](EDD-v0.2.md) is the current architecture and requirements baseline. It records owner-confirmed decisions, provisional choices, unresolved questions, release gates and V1 acceptance criteria.
-- [Implementation plan](IMPLEMENTATION_PLAN.md) will be added after the documentation baseline has been pushed and the Phase 0 feasibility work has been planned.
+- [Implementation plan](IMPLEMENTATION_PLAN.md) breaks the EDD roadmap into gated phases, tasks, deliverables and acceptance tests. It is planning only; it does not authorize application implementation.
 
 Do not treat the EDD as authorization to bypass its provider, licensing, security or legal gates. Changes to confirmed design decisions require an explicit owner decision and an updated design record.
 
