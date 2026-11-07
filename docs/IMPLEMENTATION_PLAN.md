@@ -2,49 +2,48 @@
 
 - **Design authority:** [EDD v0.2](EDD-v0.2.md). This plan does not change its decisions.
 - **V1 target:** a small, hosted, single-owner market-analysis app for NSE/BSE equities.
-- **Market-data scope:** current-day intraday candles for on-demand analysis; fetch only the prior bars required to warm up the selected indicators. Do not build a historical data warehouse.
-- **Cost constraint:** use a provider with free access for the V1 market-data needs. Do not add a paid fallback unless the owner approves it.
+- **Market-data scope:** on-demand quote snapshots and candle requests for analysis; fetch only the prior bars required to warm up selected indicators. Do not build a historical data warehouse or continuous stream in the first backend slice.
+- **Cost constraint:** Kite Connect is the owner-selected provider. Do not assume market-data access is free; confirm the active plan and any recurring charge before relying on historical candles.
 - **Shape:** one typed Python application, synchronous requests, one market-data provider and one LLM. No orders, scheduled jobs, queues, microservices, LangGraph or Google ADK.
-- **Initial provider to try:** Upstox, provisionally. Current official docs describe a free, read-only Analytics Token, current-day intraday candles and live quote/streaming APIs. This is a first connectivity candidate, not a claim that the owner's account is eligible or that candle snapshots may be retained.
-- **Current status:** no provider connectivity test has passed yet. Do not use fabricated or synthetic market candles in the app.
+- **Provider:** Zerodha Kite Connect, selected by the owner because they already hold a Zerodha account. The owner has successfully exchanged a Kite request token using `kiteconnect` and received quotes for `NSE:INFY` and `NSE:RELIANCE`. This verifies quote connectivity for that account; historical-data entitlement and snapshot rights remain to be checked. Do not use fabricated or synthetic market candles in the app.
 
 ## How to keep this small
 
 Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it works for the minimum V1 need and its terms allow the required use, proceed. For V1, fetch current-day candles when an analysis is requested. Add a continuous WebSocket stream only if the UI needs prices that update between requests. Keep the app simple and use actual provider responses for market-data checks; never substitute invented candle values.
 
-## Phase 0 — Pick and verify a free market-data provider
+## Phase 0 — Verify Kite data access and usage rights
 
-The EDD names Upstox, Angel One SmartAPI and TejHQ as possible providers, but selects none. To keep V1 simple, try Upstox first rather than comparing every candidate. Its current official documentation describes a free, read-only Analytics Token that supports current-day intraday candles and live market-data APIs. If this does not work for the owner's account or V1 data needs, return with the specific failure before adding another provider.
+Kite Connect is the selected provider for the initial implementation. The owner has already verified authentication and quote retrieval with the official Python client. Zerodha's current plan documentation says the free Personal plan does not include live or historical market data; the paid Connect plan includes both for ₹500/month per API key. Check the owner's active plan before treating historical candle access as available. A successful API response does not establish permission to retain or redistribute market data.
 
 | Work | Depends on | Result and check |
 |---|---|---|
 | Confirm the minimum V1 data need: supported NSE/BSE listings, an intraday interval and enough bars for the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of symbols and intervals. Limit old history to indicator warm-up; do not backfill a large history. |
-| Create an Upstox Analytics Token for the owner's account and make one authenticated Intraday Candle V3 request for a real NSE/BSE instrument while its market is open. Check the latest candle timestamp and whether the last candle is complete. | Minimum data need; owner has an Upstox account/token | A recorded result: request succeeded and returned real same-day candles, or the exact HTTP/API error and next action. Never put the token in chat, source control, screenshots or logs. |
-| Check whether the applicable account terms allow the V1 use: processing, private display and the EDD's per-report normalized candle snapshot, including storage and deletion. | Provider terms | Record the relevant terms or written provider answer. If snapshot rights are unclear, pause snapshot persistence and ask the owner; free API access does not itself establish retention rights. |
+| Call Kite historical candles for one real NSE equity over a small recent range, record returned timestamps/interval and confirm the active plan permits the request. This can be tested outside market hours. | Kite login and historical-data entitlement | Real provider candles or the exact entitlement/API error. Never put credentials or tokens in chat, source control, screenshots or logs. |
+| Check whether applicable Zerodha/exchange terms allow the intended private processing, display and the EDD's retained per-report candle snapshot, including storage and deletion. | Provider and exchange terms | Record sources or written provider clarification. Until retention permission is clear, return data in memory only and do not save market-data payloads. |
 
-**Phase 0 is done when:** the Upstox test returns real same-day candles for the minimum V1 request and the required use/snapshot rights are clear, or the exact blocker is presented to the owner. Do not implement a second provider just because the first test fails. A same-day-only V1 initially supports intraday analysis; daily/swing analysis needs enough prior candles to warm up its indicators. The backend shell can proceed after implementation approval, but live data handling follows the successful connectivity and terms checks.
+**Phase 0 status:** Kite authentication and quote connectivity are verified by the owner. Historical candle entitlement/coverage and market-data snapshot rights remain open. The backend may return real provider data without persistence; do not store candle snapshots until rights are confirmed. Do not add another provider unless Kite cannot meet a necessary V1 requirement and the owner approves a change.
 
-### Official research starting points
+### Official provider references
 
-Provider comparison from current official sources: **Upstox** is the first choice to test because its free read-only Analytics Token supports the current-day candle and live-data API categories; current-day intraday candles are available over REST, and continuous WebSocket feeds are available if needed. The WebSocket uses Protobuf, so defer it unless the UI needs continuous updates. **Angel One SmartAPI** also documents free live WebSocket/quote access, but its documented login uses account credentials plus TOTP and the session lasts until midnight. **TejHQ is not suitable for live/same-day-in-session V1:** it documents end-of-day data, normally available the next morning. Sources: [Upstox Analytics Token](https://upstox.com/developer/api-documentation/analytics-token/), [Upstox Intraday Candle V3](https://upstox.com/developer/api-documentation/v3/get-intra-day-candle-data/), [Upstox live feed V3](https://upstox.com/developer/api-documentation/v3/get-market-data-feed/), [Angel One SmartAPI](https://smartapi.angelone.in/docs) and [FAQ](https://smartapi.angelone.in/faq), [TejHQ API reference](https://tejhq.dev/docs) and [data terms](https://tejhq.dev/data-terms). NSE publishes a separate [Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy). Check account-specific terms before storing or displaying data: API documentation and a successful response do not by themselves establish snapshot-retention rights. Sources checked 2026-11-07; recheck when testing.
+The owner's initial live quote check used the official `kiteconnect` client. Kite's [authentication docs](https://kite.trade/docs/connect/v3/user/) describe the one-time request-token exchange; its [historical candle API](https://kite.trade/docs/connect/v3/historical/) documents candle intervals and date ranges. Zerodha's [current plan FAQ](https://support.zerodha.com/category/trading-and-markets/general-kite/kite-api/articles/kite-connect-api-faqs) says the free Personal plan excludes market data and historical data, while paid Connect includes both at ₹500/month per API key. The [Kite terms](https://www.kite.trade/terms/) and [NSE Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy) must be reviewed for the intended processing, display and snapshot-retention use. Successful access does not by itself establish retention rights. Sources checked 2026-11-07; recheck before hosted release.
 
 ## Phase 1 — Backend foundation and API shell
 
-**Depends on:** owner approval to begin implementation. Provider research can continue in parallel using the Phase 0 checklist.
+**Depends on:** owner approval to begin implementation (granted for backend work on `feat/kite-backend`). Provider-rights review continues in parallel; the initial local API returns data without storing it.
 
-**Work:** Create the Python modular-monolith app, FastAPI shell, typed request/response contracts, configuration, local development setup, PostgreSQL schema/migrations, and owner-only authentication. Test the backend contracts, auth and error handling. Do not build the UI or fabricate market-data responses.
+**Work:** Create the local Python/FastAPI shell, typed request/response contracts, configuration and development runner. For this local data-API stage, use the owner's manually generated Kite access token from `.env`; do not add application login, database or migrations yet. Add owner authentication and persistence before any hosted deployment. Do not build the UI or fabricate market-data responses.
 
-**Deliverable:** a locally runnable backend with documented API contracts and an owner-only auth boundary.
+**Deliverable:** a locally runnable backend with documented API contracts and no exposed market-data credentials.
 
-**Acceptance check:** the API starts from documented steps; request/response schemas and errors are tested; protected routes reject anonymous requests; health/status output contains no secrets; schema migrations work from an empty database.
+**Acceptance check:** the API starts from the runner script; health and response schemas work; provider errors are bounded; health/status output contains no secrets; `.env` stays untracked. This local stage is not deployable.
 
-**Done when:** the backend shell and its first API tests run locally and are ready for the selected provider integration.
+**Done when:** the backend shell and its mocked API tests run locally and are ready for real Kite connectivity checks.
 
 ## Phase 2 — Basic market data
 
 **Depends on:** Phase 1; Phase 0 provider capability and snapshot-rights checks for any live or retained data.
 
-**Work:** Connect one provider adapter to Upstox's current-day intraday candle endpoint; retrieve real candles on each analysis request. Add only the instrument lookup, request limits/timeouts, normalization and validation needed for the observed responses. Store exact normalized candles only under the approved retention policy. Defer a persistent streaming connection unless the UI needs continuous updates. Avoid building a provider framework or generalized data warehouse.
+**Work:** Connect the Kite adapter to quote and historical-candle endpoints; retrieve real provider data on request. Add only the instrument lookup, request limits/timeouts, normalization and validation needed for observed responses. Return data without persistence until the provider/exchange rights and retention policy are confirmed. Defer WebSocket streaming unless the UI needs continuous updates. Avoid building a provider framework or generalized data warehouse.
 
 **Deliverable:** a tested backend endpoint/service can retrieve and validate supported candles, with source and time-range recorded.
 
@@ -102,10 +101,10 @@ Provider comparison from current official sources: **Upstox** is the first choic
 
 ## Decisions to make when needed
 
-- **Before live provider integration:** confirm the Upstox account/token works, choose supported intraday intervals, decide the minimum indicator warm-up bars, and confirm data/snapshot rights.
+- **Before historical analysis:** confirm Kite historical-data entitlement, choose supported intervals, decide the minimum indicator warm-up bars, and confirm processing/display rights. Before persisting snapshots, confirm retention and deletion rights explicitly.
 - **Before storing user reports:** hosting choice, region, authentication/session approach and retention periods.
 - **Before sending evidence to an LLM:** model/provider, applicable data terms and bounded cost/latency.
 - **Before actionable LONG/SHORT output:** supported segment × horizon × direction rules, especially cash-equity SHORT.
 - **After basic V1 works:** whether to pursue more indicators, additional providers, backtesting or paper trading. These are not prerequisites for the first vertical slice.
 
-No calendar estimates are included. Each phase should be kept small and adjusted based on what the preceding phase actually demonstrates. This plan does not authorize application code; wait for the owner's approval to start implementation.
+No calendar estimates are included. Each phase should be kept small and adjusted based on what the preceding phase actually demonstrates. The owner has approved the initial backend implementation on `feat/kite-backend`; later phases still require their listed decisions and acceptance checks.
