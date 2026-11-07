@@ -1,35 +1,34 @@
 # V1 Implementation Plan
 
-- **Design authority:** [EDD v0.2](EDD-v0.2.md). This plan does not change its decisions.
+- **Design authority:** [EDD v0.3](EDD-v0.3.md). This plan does not change its decisions.
 - **V1 target:** a small, hosted, single-owner market-analysis app for NSE/BSE equities.
 - **Market-data scope:** on-demand quote snapshots and candle requests for analysis; fetch only the prior bars required to warm up selected indicators. Do not build a historical data warehouse or continuous stream in the first backend slice.
 - **Cost constraint:** Kite Connect is the owner-selected provider. Do not assume market-data access is free; confirm the active plan and any recurring charge before relying on historical candles.
 - **Shape:** one typed Python application, synchronous requests, one market-data provider and one LLM. No orders, scheduled jobs, queues, microservices, LangGraph or Google ADK.
-- **Provider:** Zerodha Kite Connect, selected by the owner because they already hold a Zerodha account. The owner has successfully exchanged a Kite request token using `kiteconnect` and received quotes for `NSE:INFY` and `NSE:RELIANCE`. This verifies quote connectivity for that account; historical-data entitlement and snapshot rights remain to be checked. Do not use fabricated or synthetic market candles in the app.
+- **Provider:** Zerodha Kite Connect, selected by the owner because they already hold a Zerodha account. The owner has successfully exchanged a Kite request token using `kiteconnect` and received quotes for `NSE:INFY` and `NSE:RELIANCE`. This verifies quote connectivity for that account. Historical-candle entitlement and supported intervals still need a direct API check. Do not use fabricated or synthetic market candles in the app.
 
 ## How to keep this small
 
-Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it works for the minimum V1 need and its terms allow the required use, proceed. For V1, fetch current-day candles when an analysis is requested. Add a continuous WebSocket stream only if the UI needs prices that update between requests. Keep the app simple and use actual provider responses for market-data checks; never substitute invented candle values.
+Do not require every hosting, monitoring or future-scale decision before the first code. Resolve only choices that can block the next step. Try one provider first; if it meets the minimum V1 need, proceed. For V1, fetch current-day candles when an analysis is requested. Add a continuous WebSocket stream only if the UI needs prices that update between requests. Keep the app simple and use actual provider responses for market-data checks; never substitute invented candle values.
 
-## Phase 0 — Verify Kite data access and usage rights
+## Phase 0 — Verify Kite historical-data access
 
-Kite Connect is the selected provider for the initial implementation. The owner has already verified authentication and quote retrieval with the official Python client. Zerodha's current plan documentation says the free Personal plan does not include live or historical market data; the paid Connect plan includes both for ₹500/month per API key. Check the owner's active plan before treating historical candle access as available. A successful API response does not establish permission to retain or redistribute market data.
+Kite Connect is the selected provider. The owner has verified authentication and quote retrieval. Before depending on historical candles, confirm that the owner's account can retrieve the required intervals and enough bars for the initial indicators. This is a data-access check for the local application, not a blocker to storing the owner's fetched candle responses with their reports and charts. Public display or redistribution is outside the current scope.
 
 | Work | Depends on | Result and check |
 |---|---|---|
-| Confirm the minimum V1 data need: supported NSE/BSE listings, an intraday interval and enough bars for the initial indicators. Keep the EDD's single-owner, no-orders scope. | EDD v0.2 | A short list of symbols and intervals. Limit old history to indicator warm-up; do not backfill a large history. |
-| Call Kite historical candles for one real NSE equity over a small recent range, record returned timestamps/interval and confirm the active plan permits the request. This can be tested outside market hours. | Kite login and historical-data entitlement | Real provider candles or the exact entitlement/API error. Never put credentials or tokens in chat, source control, screenshots or logs. |
-| Check whether applicable Zerodha/exchange terms allow the intended private processing, display and the EDD's retained per-report candle snapshot, including storage and deletion. | Provider and exchange terms | Record sources or written provider clarification. Until retention permission is clear, return data in memory only and do not save market-data payloads. |
+| Confirm the first supported symbols, candle interval, and indicator warm-up requirement. | EDD v0.3 | A small request list; do not backfill unrelated history. |
+| Request a small, recent historical candle range for one real NSE equity using the owner's account. Record the actual timestamps, interval, and any entitlement/API error. | Kite access token and account | Real provider response or the exact error. Never put credentials or tokens in chat, source control, screenshots, or logs. |
 
-**Phase 0 status:** Kite authentication and quote connectivity are verified by the owner. Historical candle entitlement/coverage and market-data snapshot rights remain open. The backend may return real provider data without persistence; do not store candle snapshots until rights are confirmed. Do not add another provider unless Kite cannot meet a necessary V1 requirement and the owner approves a change.
+**Phase 0 status:** Kite authentication and quote connectivity are verified. Historical-candle entitlement and coverage should be confirmed with a real request before relying on those intervals. Do not add another provider unless Kite cannot meet a necessary requirement and the owner approves a change.
 
 ### Official provider references
 
-The owner's initial live quote check used the official `kiteconnect` client. Kite's [authentication docs](https://kite.trade/docs/connect/v3/user/) describe the one-time request-token exchange; its [historical candle API](https://kite.trade/docs/connect/v3/historical/) documents candle intervals and date ranges. Zerodha's [current plan FAQ](https://support.zerodha.com/category/trading-and-markets/general-kite/kite-api/articles/kite-connect-api-faqs) says the free Personal plan excludes market data and historical data, while paid Connect includes both at ₹500/month per API key. The [Kite terms](https://www.kite.trade/terms/) and [NSE Data Sharing & Usage Policy](https://www.nseindia.com/static/market-data/nse-data-policy) must be reviewed for the intended processing, display and snapshot-retention use. Successful access does not by itself establish retention rights. Sources checked 2026-11-07; recheck before hosted release.
+The owner's quote check used the official `kiteconnect` client. Kite's [authentication docs](https://kite.trade/docs/connect/v3/user/) describe the request-token exchange; its [historical candle API](https://kite.trade/docs/connect/v3/historical/) documents supported intervals and ranges. These references help verify the API behavior; the account's actual response confirms its entitlement.
 
 ## Phase 1 — Backend foundation and API shell
 
-**Depends on:** owner approval to begin implementation (granted for backend work on `feat/kite-backend`). Provider-rights review continues in parallel; the initial local API returns data without storing it.
+**Depends on:** owner approval to begin implementation (granted). The initial backend is local and owner-only.
 
 **Work:** Create the local Python/FastAPI shell, typed request/response contracts, configuration and development runner. For this local data-API stage, use the owner's manually generated Kite access token from `.env`; do not add application login, database or migrations yet. Add owner authentication and persistence before any hosted deployment. Do not build the UI or fabricate market-data responses.
 
@@ -41,13 +40,13 @@ The owner's initial live quote check used the official `kiteconnect` client. Kit
 
 ## Phase 2 — Basic market data
 
-**Depends on:** Phase 1; Phase 0 provider capability and snapshot-rights checks for any live or retained data.
+**Depends on:** Phase 1 and a successful Phase 0 historical-data check for the requested intervals.
 
-**Work:** Connect the Kite adapter to quote and historical-candle endpoints; retrieve real provider data on request. Add only the instrument lookup, request limits/timeouts, normalization and validation needed for observed responses. Return data without persistence until the provider/exchange rights and retention policy are confirmed. Defer WebSocket streaming unless the UI needs continuous updates. Avoid building a provider framework or generalized data warehouse.
+**Work:** Connect the Kite adapter to quote and historical-candle endpoints; retrieve real provider data on request. Add only the instrument lookup, request limits/timeouts, normalization and validation needed for observed responses. Return real provider data. Add local report and candle persistence with report-history work. Defer WebSocket streaming unless the UI needs continuous updates. Avoid building a provider framework or generalized data warehouse.
 
 **Deliverable:** a tested backend endpoint/service can retrieve and validate supported candles, with source and time-range recorded.
 
-**Acceptance check:** supported requests return correctly ordered candles with explicit timestamps and OHLCV; unsupported, empty, malformed, stale or unauthorized responses produce clear errors; snapshots cannot be written when rights are unapproved and expire/delete according to the selected policy.
+**Acceptance check:** supported requests return correctly ordered candles with explicit timestamps and OHLCV; unsupported, empty, malformed, stale or unauthorized responses produce clear errors.
 
 **Done when:** one provider works for the limited V1 request set and its limitations are visible to the user.
 
@@ -57,9 +56,9 @@ The owner's initial live quote check used the official `kiteconnect` client. Kit
 
 **Work:** Implement OHLCV evidence, SMA/EMA, RSI and ATR with clear warm-up and missing-data behavior. Add a small set of named analysis/risk gates and candidate price levels. Keep all calculations in ordinary typed Python functions.
 
-**Deliverable:** tested backend services and API responses for deterministic evidence and candidate levels calculated from real provider candles or a permitted retained snapshot.
+**Deliverable:** tested backend services and API responses for deterministic evidence and candidate levels calculated from real provider candles or the candle input saved with a report.
 
-**Acceptance check:** calculations are checked against actual provider candles (retained as test data only if permitted); repeated analysis of the same permitted input produces repeatable outputs; candle boundaries and lookahead are checked; failed or unknown mandatory gates cannot become actionable; no scalar setup score or uncalibrated probability is produced. Do not generate synthetic candles for these checks.
+**Acceptance check:** calculations are checked against real provider candles; repeated analysis of the same input produces repeatable outputs; candle boundaries and lookahead are checked; failed or unknown mandatory gates cannot become actionable; no scalar setup score or uncalibrated probability is produced. Do not generate synthetic candles for these checks.
 
 **Done when:** the analysis result is useful and explainable without calling an LLM.
 
@@ -77,9 +76,9 @@ The owner's initial live quote check used the official `kiteconnect` client. Kit
 
 ## Phase 5 — UI and end-to-end integration
 
-**Depends on:** the Phase 4 report API and its contract tests are stable. Chart replay depends on permitted retained snapshots.
+**Depends on:** the Phase 4 report API and its contract tests are stable. Chart replay uses the candle input saved with the report.
 
-**Work:** Build the React/TypeScript interface against the tested backend APIs: instrument/timeframe form, report view, simple report history, charts from the report's own snapshot where allowed, and follow-up chat scoped to that report. Keep UI logic thin; validation and analysis rules stay in the backend.
+**Work:** Build the React/TypeScript interface against the tested backend APIs: instrument/timeframe form, report view, simple report history, charts from the candle data saved with the report, and follow-up chat scoped to that report. Keep UI logic thin; validation and analysis rules stay in the backend.
 
 **Deliverable:** an integrated UI lets the owner request, inspect and revisit an analysis through the backend APIs.
 
@@ -101,10 +100,10 @@ The owner's initial live quote check used the official `kiteconnect` client. Kit
 
 ## Decisions to make when needed
 
-- **Before historical analysis:** confirm Kite historical-data entitlement, choose supported intervals, decide the minimum indicator warm-up bars, and confirm processing/display rights. Before persisting snapshots, confirm retention and deletion rights explicitly.
+- **Before relying on historical analysis:** confirm Kite entitlement, supported intervals, and the minimum indicator warm-up bars. Before expanding beyond the private owner application or redistributing data, review the applicable provider requirements.
 - **Before storing user reports:** hosting choice, region, authentication/session approach and retention periods.
 - **Before sending evidence to an LLM:** model/provider, applicable data terms and bounded cost/latency.
 - **Before actionable LONG/SHORT output:** supported segment × horizon × direction rules, especially cash-equity SHORT.
 - **After basic V1 works:** whether to pursue more indicators, additional providers, backtesting or paper trading. These are not prerequisites for the first vertical slice.
 
-No calendar estimates are included. Each phase should be kept small and adjusted based on what the preceding phase actually demonstrates. The owner has approved the initial backend implementation on `feat/kite-backend`; later phases still require their listed decisions and acceptance checks.
+No calendar estimates are included. Each phase should be kept small and adjusted based on what the preceding phase actually demonstrates. The owner has approved the backend-first implementation. Later phases still require their listed decisions and acceptance checks.
