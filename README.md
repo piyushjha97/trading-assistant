@@ -14,7 +14,7 @@ The backend calls Kite for real provider data. It does not substitute synthetic 
 
 - Python 3.12 or newer.
 - A Kite API key and a valid Kite access token for the owner's account. Ask the repository owner to provide these through an approved secure channel. Do not paste credentials into chat, issues, pull requests, or source files.
-- Kite access tokens expire daily. Ask the owner for a fresh token when needed. The backend does not implement Kite login or token generation. It needs the API key and access token at runtime; it does not need the API secret.
+- Kite access tokens expire at 6:00 AM the next day; see [Kite Connect authentication docs](https://www.kite.trade/docs/connect/v3/user/). Ask the owner for a fresh token when needed. The backend does not implement Kite login or token generation. It needs the API key and access token at runtime; it does not need the API secret.
 
 Clone the repository and enter its directory, or open your existing local clone:
 
