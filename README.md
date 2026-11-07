@@ -1,6 +1,6 @@
 # Trading Assistant
 
-An AI-assisted analysis application for Indian equities. The design direction is documented in the [Engineering Design Document (EDD) v0.2](docs/EDD-v0.2.md).
+An AI-assisted analysis application for Indian equities. The design direction is documented in the [Engineering Design Document (EDD) v0.3](docs/EDD-v0.3.md).
 
 ## What is implemented today
 
