@@ -1,0 +1,170 @@
+{
+  "info": {
+    "_postman_id": "4d78de2f-daa8-4a54-a9be-916875652303",
+    "name": "Trading Assistant API (Local)",
+    "description": "Local FastAPI endpoints for health and real Kite Connect market data. The backend reads KITE_API_KEY and KITE_ACCESS_TOKEN from its local .env file; no credentials belong in this collection. Run the backend on 127.0.0.1:8000 before sending requests. Quote requests return snapshots, not a continuous WebSocket stream. Historical candles require the applicable Kite data entitlement.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "exchange",
+      "value": "NSE",
+      "type": "string"
+    },
+    {
+      "key": "symbol",
+      "value": "INFY",
+      "type": "string"
+    },
+    {
+      "key": "interval",
+      "value": "day",
+      "type": "string"
+    },
+    {
+      "key": "from",
+      "value": "2025-01-02T09:15:00%2B05:30",
+      "type": "string"
+    },
+    {
+      "key": "to",
+      "value": "2025-01-03T15:30:00%2B05:30",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('reports healthy status', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/v1/health",
+            "description": "Checks that the backend process responds. Does not call Kite."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Market data",
+      "item": [
+        {
+          "name": "Get capabilities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('identifies Kite and non-persistence mode', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.provider).to.eql('kite');",
+                  "  pm.expect(body.market_data_storage).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/v1/market-data/capabilities",
+            "description": "Shows whether an access token is configured. It does not verify Kite plan entitlements."
+          },
+          "response": []
+        },
+        {
+          "name": "Get quote snapshots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response identifies the Kite provider', function () { pm.expect(pm.response.json().provider).to.eql('kite'); });",
+                  "pm.test('returns quote and missing-symbol arrays', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.quotes).to.be.an('array');",
+                  "  pm.expect(body.missing_symbols).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/v1/market-data/quotes?symbols=NSE%3AINFY&symbols=NSE%3ARELIANCE",
+            "description": "Fetches quote snapshots for the requested exchange-qualified symbols. Outside market hours, the returned quote may be the last available snapshot."
+          },
+          "response": []
+        },
+        {
+          "name": "Get historical candles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response matches requested instrument and interval', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.provider).to.eql('kite');",
+                  "  pm.expect(body.exchange).to.eql(pm.collectionVariables.get('exchange'));",
+                  "  pm.expect(body.symbol).to.eql(pm.collectionVariables.get('symbol'));",
+                  "  pm.expect(body.interval).to.eql(pm.collectionVariables.get('interval'));",
+                  "  pm.expect(body.candles).to.be.an('array');",
+                  "});",
+                  "pm.test('candles are ordered by timestamp', function () {",
+                  "  const candles = pm.response.json().candles;",
+                  "  for (let i = 1; i < candles.length; i += 1) {",
+                  "    pm.expect(Date.parse(candles[i - 1].timestamp)).to.be.at.most(Date.parse(candles[i].timestamp));",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/api/v1/market-data/candles?exchange={{exchange}}&symbol={{symbol}}&interval={{interval}}&from={{from}}&to={{to}}",
+            "description": "Fetches actual Kite candles for the interval and date range. Requires historical-data entitlement. Supported intervals: minute, 3minute, 5minute, 10minute, 15minute, 30minute, 60minute, day."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
