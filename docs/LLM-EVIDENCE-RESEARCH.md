@@ -138,6 +138,36 @@ An illustrative excerpt for an intraday report is shown below. Evidence values i
 
 In this example a single RSI reading cannot establish improvement. The validator should reject that claim if using a controlled assertion such as `momentum_improving`, and human evaluation must catch the same error in free text. An accepted explanation could state that RSI is above its midpoint while the stock is lagging the sector.
 
+## Reusable Python module
+
+`trading_assistant.market_context` exposes `MarketContextService.fetch(ContextRequest) -> ContextSnapshot`. It can run directly in Python and has no dependency on FastAPI, the dashboard or an LLM SDK. The application supplies a `MarketProvider` and optional `EventProvider` implementations for catalysts and news. An alternative implementation can use a different vendor or an approved model-assisted discovery workflow. The report caller keeps the same contract. Import the Kite adapter separately from `trading_assistant.market_context.kite`.
+
+```python
+from trading_assistant.market_context import ContextRequest, MarketContextService
+from trading_assistant.market_context.kite import KiteMarketContextProvider
+from trading_assistant.market_data.models import Exchange
+
+# The application supplies the authenticated KiteMarketDataProvider.
+market = KiteMarketContextProvider(
+    kite_provider,
+    sector_by_listing={(Exchange.NSE, "INFY"): "NIFTY IT"},
+)
+service = MarketContextService(market=market)
+snapshot = service.fetch(ContextRequest(
+    exchange="NSE",
+    symbol="INFY",
+    interval="15minute",
+    start_bar="2026-11-23T09:15:00+05:30",
+    end_bar="2026-11-23T15:00:00+05:30",
+    cutoff="2026-11-23T15:30:00+05:30",
+    event_from="2026-11-20T00:00:00+05:30",
+))
+```
+
+The Kite adapter produces Nifty 50 and configured sector returns, the stock’s relative returns, and India VIX level and change. It requires exact, completed bar endpoints. A missing endpoint affects only the metrics that use it. Coverage describes the requested window. The caller chooses a suitable window and applies freshness and exchange-calendar checks before interpreting it as current. Kite historical responses are fetched at runtime, so a historical cutoff alone cannot prove what revisions were known then.
+
+Catalyst and news adapters own provider timeouts, entity matching and coverage. They return source records with verified publication and observation timestamps or raise `SourceUnavailable` for an expected read failure. The service filters records to the requested publication window and knowledge cutoff and keeps the latest eligible revision per source record. Scheduled events may occur after the cutoff. Choose a publication lookback wide enough to include previously announced upcoming events. Cross-source deduplication belongs in the relevant feed adapter. Catalyst and news providers are currently injection points and default to `not_configured`. Numeric breadth and fundamentals retain their planned separate data work. A report integration must still apply the source entitlement and approved model-input projection before sending any snapshot fields externally.
+
 ## Delivery and evaluation
 
 1. **Define the report boundary and deterministic prerequisites.** Reuse `technical_evidence` and completed-bar selection. Add the typed snapshot/coverage and deterministic verdict contracts under the existing evaluation stage. Use a fixture-backed interpreter for contract tests while actual provider and data permissions are reviewed.
