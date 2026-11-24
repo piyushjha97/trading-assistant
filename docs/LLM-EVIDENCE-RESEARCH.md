@@ -30,6 +30,20 @@ Letting the LLM choose sources would make retrieval and interpretation vary toge
 - The local stock quote route returned HTTP 422 for `NSE:NIFTY 50` because public symbol validation rejects spaces. Keep stock search and technical routes equity-specific. Add an internal, allowlisted benchmark path through the existing provider.
 - Official pages confirm the advertised feeds and interfaces. This research measured neither paid-vendor latency nor NSE RSS/MCP completeness. Confirm the polling and permitted use of actual feeds before enabling scheduled ingestion.
 
+## Can the LLM fetch the three inputs?
+
+Yes. With function calling, the LLM can request data and the backend can execute the corresponding read-only adapter. With a web search tool, it can also discover public sources. A system prompt can specify source preferences, how to search, and when to report uncertainty. Strict schemas constrain function arguments and report shape. The backend still needs to verify identity, timing, coverage and permissions before using an item. For example, a correctly formatted response can cite an old earnings release, or omit a material filing entirely. [Function calling](https://developers.openai.com/api/docs/guides/function-calling) · [Agent safety](https://developers.openai.com/api/docs/guides/agent-builder-safety)
+
+| Input | Where model-directed retrieval helps | Main downside and proposed boundary |
+| --- | --- | --- |
+| Market and sector performance | The model could request context for an unfamiliar sector or a second comparison window. | Kite access still needs an adapter. A plausible result can mix sessions or intervals, miss a bar, or use a stale quote. The backend always fetches required benchmarks, aligns completed bars, and calculates returns and VIX changes. |
+| Company and macro catalysts | The model can search alternate issuer names, follow useful leads, and suggest relevant filings or policy releases when the first query is sparse. | Search can surface old stories, duplicate disclosures, or the wrong issuer. It can also miss a mandatory event. The backend checks official feeds and calendars on every applicable report and validates any additional candidate against the primary source and cutoff. |
+| Broader news and market breadth | The model can adapt searches to new industry themes, global developments, and follow-up questions. | Search rankings, coverage and publication lag vary. Syndicated copies can exaggerate the apparent weight of a story. Use a licensed feed and deduplicate news before it enters the report. Use a fixed provider query for breadth, which is a numeric market measure tied to a universe and session. |
+
+Model-directed retrieval can broaden coverage without writing rules for every news topic or issuer alias. It adds model/tool turns, variable cost and latency, and another source of variation between runs. Even a strong prompt cannot verify that search found every material event. Retrieved text can also contain instructions that affect the model's next action. The same observed evidence can be replayed if source records are retained under their terms. The original search results may change.
+
+If we pilot this, expose a single supplementary discovery tool backed by approved sources. The server sets the instrument, dates, allowed providers and permissions, then enforces call and time limits. Each returned candidate must resolve to a source record with matching entity or market scope, publication time at or before the cutoff, and allowed usage. Deduplicate candidates against the base snapshot and treat retrieved text as data. Record failed or skipped searches as incomplete coverage. Compare the pilot with backend-only retrieval on missed material events, irrelevant or duplicate hits, repeatability and total report latency and cost. Keep structured backend retrieval for the first release. The best initial use for model-directed retrieval is discovering optional news for follow-up questions.
+
 ## What to supply by trading horizon
 
 | Evidence | Intraday | Swing, up to two weeks |
