@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+
+from trading_assistant.config import get_settings
 from trading_assistant.market_data.kite_provider import (
     KiteMarketDataProvider,
     KiteProviderError,
@@ -11,6 +14,7 @@ from trading_assistant.market_data.models import (
     Exchange,
     QuoteResponse,
 )
+from trading_assistant.market_data.kite_session import connect_kite_session, kite_login_url
 
 router = APIRouter()
 
@@ -29,6 +33,22 @@ def _as_http_error(error: KiteProviderError) -> HTTPException:
 @router.get("/api/v1/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/api/v1/kite/login-url")
+def login_url(state: str = Query(pattern=r"^[a-f0-9]{64}$")) -> dict[str, str]:
+    return {"url": kite_login_url(get_settings(), state)}
+
+
+class KiteSessionRequest(BaseModel):
+    request_token: str = Field(pattern=r"^[A-Za-z0-9_-]{1,256}$")
+
+
+@router.post("/api/v1/kite/session", status_code=204)
+def connect_kite(request: Request, payload: KiteSessionRequest) -> None:
+    with request.app.state.kite_session_lock:
+        settings = connect_kite_session(get_settings(), payload.request_token)
+        request.app.state.kite_provider = KiteMarketDataProvider(settings)
 
 
 @router.get("/api/v1/market-data/capabilities")

@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     kite_api_key: str
-    kite_access_token: SecretStr
+    kite_access_token: SecretStr = SecretStr("")
+    kite_api_secret: SecretStr = SecretStr("")
     kite_timeout_seconds: float = 10.0
 
 

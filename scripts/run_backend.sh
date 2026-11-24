@@ -5,13 +5,13 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 if [[ ! -f .env ]]; then
-    cp .env.example .env
-    echo "Created .env from .env.example. Add KITE_API_KEY and KITE_ACCESS_TOKEN, then run this script again."
+    (umask 077; printf '%s\n' 'KITE_API_KEY=' 'KITE_API_SECRET=' > .env)
+    echo "Created .env. Add KITE_API_KEY and KITE_API_SECRET, then run this script again."
     exit 1
 fi
 
-if grep -Eq '^KITE_API_KEY=replace-with-|^KITE_ACCESS_TOKEN=replace-with-|^KITE_API_KEY[[:space:]]*=[[:space:]]*$|^KITE_ACCESS_TOKEN[[:space:]]*=[[:space:]]*$' .env; then
-    echo "Set KITE_API_KEY and KITE_ACCESS_TOKEN in .env, then run this script again."
+if grep -Eq '^KITE_API_KEY=replace-with-|^KITE_API_KEY[[:space:]]*=[[:space:]]*$' .env; then
+    echo "Set KITE_API_KEY in .env, then run this script again."
     exit 1
 fi
 
