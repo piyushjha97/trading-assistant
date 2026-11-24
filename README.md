@@ -4,7 +4,7 @@ An AI-assisted analysis application for Indian equities. The design direction is
 
 ## What is implemented today
 
-The current application slice is a **local FastAPI backend** that requests live quote snapshots and historical candles from Zerodha Kite Connect. It does not generate AI analysis or place orders, and it has no UI, persistence, or application login yet. Run it on your own machine only; it is not ready to deploy or expose on a network.
+The application runs locally with a **FastAPI backend** for Zerodha Kite quote snapshots and candles and a **Next.js research dashboard**. Use the dashboard to select a listing, switch chart intervals, and inspect the available market data. Evaluation and AI reports, persistence, and application login are planned. Keep both servers on your own machine.
 
 The backend calls Kite for real provider data. It does not substitute synthetic data. Historical candle availability depends on the Kite account's entitlements.
 
@@ -49,6 +49,21 @@ From the repository root:
 ```
 
 The script creates a local `.venv` and installs the application and development dependencies if needed, then starts FastAPI on `127.0.0.1:8000`. Keep the process running in that terminal. If you update the access token, stop and restart the backend.
+
+### Open the dashboard
+
+With the backend running, use Node.js 20.9 or newer in a second terminal:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:3000`. The dashboard requests market data through the
+Next.js server, which uses `http://127.0.0.1:8000` by default. Set
+`TRADING_BACKEND_URL` in the Next.js server environment if the local backend
+uses a different loopback port.
 
 ### Check the API
 
