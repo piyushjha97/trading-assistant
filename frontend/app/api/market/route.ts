@@ -5,17 +5,16 @@ import {
   type Interval,
   type Quote,
 } from "../../../lib/market";
+import { localBackendUrl } from "../../../lib/backend";
 
-class MarketRequestError extends Error {}
+class MarketRequestError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
 
 async function getFromBackend<T>(path: string, params: URLSearchParams): Promise<T> {
-  const backend = process.env.TRADING_BACKEND_URL ?? "http://127.0.0.1:8000";
-  const origin = new URL(backend);
-  if (!["http:", "https:"].includes(origin.protocol) ||
-      !["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)) {
-    throw new MarketRequestError("The backend address must point to this machine.");
-  }
-  const url = new URL(path, origin);
+  const url = localBackendUrl(path);
   url.search = params.toString();
 
   let response: Response;
@@ -27,31 +26,31 @@ async function getFromBackend<T>(path: string, params: URLSearchParams): Promise
     });
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
-      throw new MarketRequestError("The market data request timed out. Try reloading.");
+      throw new MarketRequestError(504, "The market data request timed out. Try reloading.");
     }
-    throw new MarketRequestError("Couldn’t reach the local backend. Start it and try again.");
+    throw new MarketRequestError(503, "Couldn’t reach the local backend. Start it and try again.");
   }
 
   if (response.status === 401) {
-    throw new MarketRequestError("Kite credentials are missing or expired. Refresh the token and restart the backend.");
+    throw new MarketRequestError(401, "Connect to Kite to load market data.");
   }
   if (response.status === 403) {
-    throw new MarketRequestError("Kite denied access. Check your plan and data entitlements.");
+    throw new MarketRequestError(403, "Kite denied access. Check your plan and data entitlements.");
   }
   if (response.status === 404) {
-    throw new MarketRequestError("Kite couldn’t find this symbol on the selected exchange.");
+    throw new MarketRequestError(404, "Kite couldn’t find this symbol on the selected exchange.");
   }
   if (response.status === 429) {
-    throw new MarketRequestError("Kite’s request limit was reached. Try again shortly.");
+    throw new MarketRequestError(429, "Kite’s request limit was reached. Try again shortly.");
   }
   if (!response.ok) {
-    throw new MarketRequestError("The local backend couldn’t complete this market data request.");
+    throw new MarketRequestError(response.status, "The local backend couldn’t complete this market data request.");
   }
   return response.json() as Promise<T>;
 }
 
 function issue(reason: unknown) {
-  return reason instanceof MarketRequestError ? reason.message : "Market data is temporarily unavailable.";
+  return reason instanceof MarketRequestError ? reason : new MarketRequestError(502, "Market data is temporarily unavailable.");
 }
 
 export async function GET(request: Request) {
@@ -84,14 +83,18 @@ export async function GET(request: Request) {
 
   const quote = quoteResult.status === "fulfilled" ? quoteResult.value.quotes[0] ?? null : null;
   const candles = candleResult.status === "fulfilled" ? candleResult.value : null;
+  const quoteError = quoteResult.status === "rejected" ? issue(quoteResult.reason) : undefined;
+  const candleError = candleResult.status === "rejected" ? issue(candleResult.reason) : undefined;
+  const kiteLoginRequired = quoteError?.status === 401 || candleError?.status === 401;
+  const status = quote || candles?.candles.length ? 200 :
+    kiteLoginRequired ? 401 : candleError?.status ?? quoteError?.status ?? 404;
   return Response.json({
     quote,
     candles,
+    kiteLoginRequired,
     issues: {
-      quote: quoteResult.status === "rejected" ? issue(quoteResult.reason) :
-        !quote ? "Kite returned no quote for this symbol." : undefined,
-      candles: candleResult.status === "rejected" ? issue(candleResult.reason) :
-        candles?.candles.length === 0 ? "Kite returned no candles in this window." : undefined,
+      quote: quoteError?.message ?? (!quote ? "Kite returned no quote for this symbol." : undefined),
+      candles: candleError?.message ?? (candles?.candles.length === 0 ? "Kite returned no candles in this window." : undefined),
     },
-  }, { headers: { "Cache-Control": "no-store" } });
+  }, { status, headers: { "Cache-Control": "no-store" } });
 }

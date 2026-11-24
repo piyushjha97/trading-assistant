@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from threading import Lock
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -10,11 +11,13 @@ from trading_assistant.market_data.kite_provider import (
     KiteMarketDataProvider,
     KiteProviderError,
 )
+from trading_assistant.market_data.kite_session import restore_kite_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.kite_provider = KiteMarketDataProvider(get_settings())
+    app.state.kite_provider = KiteMarketDataProvider(restore_kite_session(get_settings()))
+    app.state.kite_session_lock = Lock()
     yield
 
 

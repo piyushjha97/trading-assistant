@@ -4,7 +4,7 @@ import {
   Activity, BarChart3, BellRing, CandlestickChart, ChartNoAxesCombined, CircleHelp,
   ClipboardList, Database, Globe2, Layers3, LoaderCircle, RefreshCw, Search, ShieldCheck, Sparkles,
 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   horizonIntervals, intervals, marketDate, marketTime, price, quantity,
   stockPresets, symbolPattern, type Exchange, type Horizon, type Interval,
@@ -51,6 +51,11 @@ const navigationSections = [
 ] as const;
 
 type NavigationSection = (typeof navigationSections)[number][0];
+const kiteMessages: Record<string, string> = {
+  setup: "Add KITE_API_SECRET to the backend’s .env, set the Kite callback URL, and restart the backend.",
+  retry: "Kite sign-in did not complete. Select Connect Kite and try again.",
+  unavailable: "Kite sign-in is unavailable. Check that the local backend is running and try again.",
+};
 
 export default function Dashboard() {
   const [query, setQuery] = useState(initialQuery);
@@ -59,6 +64,7 @@ export default function Dashboard() {
   const [result, setResult] = useState<MarketResult>(blankResult);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [connectionMessage, setConnectionMessage] = useState("");
   const [navigation, setNavigation] = useState<NavigationSection>("overview");
   const workspace = useRef<HTMLDivElement>(null);
   const topbar = useRef<HTMLElement>(null);
@@ -129,20 +135,21 @@ export default function Dashboard() {
   const failures = Object.values(issues).filter(Boolean);
   const feedLabel = loading ? "Loading Kite" : hasMarketData ? "Kite snapshot" : failures.length ? "Feed unavailable" : "Local workspace";
 
-  async function loadMarket(nextQuery: MarketQuery) {
+  const loadMarket = useCallback(async (nextQuery: MarketQuery) => {
     currentRequest.current?.abort();
     const controller = new AbortController();
     currentRequest.current = controller;
     setLoading(true);
     setResult(blankResult);
     setFormError("");
+    setConnectionMessage("");
     setQuery(nextQuery);
     setInput(nextQuery.symbol);
     try {
       const url = new URLSearchParams({ ...nextQuery });
       const response = await fetch("/api/market?" + url, { signal: controller.signal, cache: "no-store" });
-      if (!response.ok) throw new Error("Market data could not be loaded. Check the symbol and try again.");
-      const data = await response.json() as MarketResult;
+      const data = await response.json() as MarketResult | { error: string };
+      if ("error" in data) throw new Error(data.error);
       if (!controller.signal.aborted) setResult(data);
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -151,7 +158,29 @@ export default function Dashboard() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const connection = url.searchParams.get("kite");
+    if (!connection) return;
+    url.searchParams.delete("kite");
+    window.history.replaceState(window.history.state, "", url);
+    const pending = window.sessionStorage.getItem("kite-market-query");
+    window.sessionStorage.removeItem("kite-market-query");
+    if (connection !== "connected") {
+      setConnectionMessage(Object.hasOwn(kiteMessages, connection) ? kiteMessages[connection] : kiteMessages.retry);
+      return;
+    }
+    const params = new URLSearchParams(pending ?? "");
+    const exchange = params.get("exchange");
+    const symbol = params.get("symbol") ?? "";
+    const interval = params.get("interval") ?? "";
+    if (params.get("horizon") === "Swing") setHorizon("Swing");
+    const validQuery = (exchange === "NSE" || exchange === "BSE") &&
+      symbolPattern.test(symbol) && Object.hasOwn(intervals, interval);
+    void loadMarket(validQuery ? { exchange, symbol, interval: interval as Interval } : initialQuery);
+  }, [loadMarket]);
 
   function onLoad(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -310,6 +339,15 @@ export default function Dashboard() {
                   <li><span className="state-dot" /><div><strong>Evidence validation</strong><span>Awaiting analysis service</span></div></li>
                 </ul>
                 {issues.quote && issues.quote !== issues.candles && <p className="connection-note" role="status">{issues.quote}</p>}
+                {connectionMessage && <p className="connection-note" role="status">{connectionMessage}</p>}
+                {!loading && (result.kiteLoginRequired || !hasMarketData) && (
+                  <a className="kite-connect" href="/api/kite/login" onClick={() => {
+                    const symbol = input.trim().toUpperCase();
+                    window.sessionStorage.setItem("kite-market-query", new URLSearchParams({
+                      ...query, symbol: symbolPattern.test(symbol) ? symbol : query.symbol, horizon,
+                    }).toString());
+                  }}>Connect Kite</a>
+                )}
               </section>
               <section className="panel rail-panel brief-panel">
                 <div className="brief-icon"><Sparkles size={19} /></div>

@@ -35,6 +35,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .top-nav a { position: relative; display: flex; align-items: center; color: var(--muted); font-size: .88rem; white-space: nowrap; }
 .top-nav a:hover, .top-nav .nav-active { color: var(--text); }
 .top-nav .nav-active::after { content: ""; position: absolute; height: 2px; inset: auto 0 -1px; background: var(--mint); border-radius: 2px; }
+.kite-connect { display: inline-flex; align-items: center; min-height: 36px; margin-top: 9px; padding: 4px 10px; border: 1px solid var(--mint); border-radius: 8px; color: var(--mint); font-size: .875rem; font-weight: 650; }
+.kite-connect:hover { background: var(--mint-dark); }
 .feed-badge, .exchange-label, .pending-badge { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; border: 1px solid var(--line); border-radius: 20px; padding: 4px 10px; color: var(--muted); font-size: .8rem; }
 .feed-badge i, .state-dot { width: 7px; height: 7px; border-radius: 50%; background: #9fb2ab; flex: none; }
 .feed-badge.available i, .state-dot.good { background: #84dfb8; box-shadow: 0 0 0 3px #84dfb820; }

@@ -57,6 +57,7 @@ export interface Quote {
 }
 
 export interface MarketResult {
+  kiteLoginRequired?: boolean;
   quote: Quote | null;
   candles: CandleBatch | null;
   issues: {

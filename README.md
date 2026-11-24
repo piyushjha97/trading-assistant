@@ -13,8 +13,8 @@ The backend calls Kite for real provider data. It does not substitute synthetic 
 ### Requirements and credentials
 
 - Python 3.12 or newer.
-- A Kite API key and a valid Kite access token for the owner's account. Ask the repository owner to provide these through an approved secure channel. Do not paste credentials into chat, issues, pull requests, or source files.
-- Kite access tokens expire at 6:00 AM the next day; see [Kite Connect authentication docs](https://www.kite.trade/docs/connect/v3/user/). Ask the owner for a fresh token when needed. The backend does not implement Kite login or token generation. It needs the API key and access token at runtime; it does not need the API secret.
+- A Kite API key and API secret for the owner's account. Keep these in the backend's local `.env`.
+- Set the Kite Connect application's registered redirect URL to `http://127.0.0.1:3000/api/kite/callback`. Use the same host and port to open the dashboard. If you change the frontend port, update both URLs.
 
 Clone the repository and enter its directory, or open your existing local clone:
 
@@ -34,7 +34,7 @@ Open `.env` in a local text editor and add the credentials supplied by the owner
 
 ```dotenv
 KITE_API_KEY=
-KITE_ACCESS_TOKEN=
+KITE_API_SECRET=
 KITE_TIMEOUT_SECONDS=10
 ```
 
@@ -48,7 +48,7 @@ From the repository root:
 ./scripts/run_backend.sh
 ```
 
-The script creates a local `.venv` and installs the application and development dependencies if needed, then starts FastAPI on `127.0.0.1:8000`. Keep the process running in that terminal. If you update the access token, stop and restart the backend.
+The script creates a local `.venv`, installs the application and development dependencies, and starts FastAPI on `127.0.0.1:8000`. For manual API-only use, you can supply `KITE_ACCESS_TOKEN` in `.env` instead of connecting through the dashboard.
 
 ### Open the dashboard
 
@@ -64,6 +64,14 @@ Open `http://127.0.0.1:3000`. The dashboard requests market data through the
 Next.js server, which uses `http://127.0.0.1:8000` by default. Set
 `TRADING_BACKEND_URL` in the Next.js server environment if the local backend
 uses a different loopback port.
+
+Select **Connect Kite** and complete Zerodha sign-in. The backend exchanges the
+one-time request token and stores the resulting access token in the ignored
+`.secrets/kite-session.json` file. The dashboard resumes the selected data
+request after sign-in. The token works across refreshes and backend restarts
+until Kite expires it at 6:00 a.m. IST the next day or revokes it. Use **Load
+market data** and the interval buttons to refresh the candlestick and volume
+chart during a valid session. [Kite authentication](https://kite.trade/docs/connect/v3/user/)
 
 ### Check the API
 
