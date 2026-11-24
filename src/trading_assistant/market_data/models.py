@@ -21,6 +21,17 @@ class CandleInterval(StrEnum):
     DAY = "day"
 
 
+class InstrumentListing(BaseModel):
+    exchange: Exchange
+    symbol: str
+    name: str
+
+
+class InstrumentSearchResponse(BaseModel):
+    provider: str = "kite"
+    instruments: list[InstrumentListing]
+
+
 class Quote(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

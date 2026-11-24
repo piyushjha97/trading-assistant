@@ -71,7 +71,11 @@ one-time request token and stores the resulting access token in the ignored
 request after sign-in. The token works across refreshes and backend restarts
 until Kite expires it at 6:00 a.m. IST the next day or revokes it. Use **Load
 market data** and the interval buttons to refresh the candlestick and volume
-chart during a valid session. [Kite authentication](https://kite.trade/docs/connect/v3/user/)
+chart during a valid session. The chart is a REST snapshot with price and volume
+for the selected interval. The readouts beneath it use only bars eligible for
+technical analysis and show when the last bar used began. Search by stock name or symbol in
+the watchlist. The single watchlist is saved in the current browser.
+[Kite authentication](https://kite.trade/docs/connect/v3/user/)
 
 ### Check the API
 
@@ -80,6 +84,8 @@ chart during a valid session. [Kite authentication](https://kite.trade/docs/conn
 - Kite capabilities: `GET http://127.0.0.1:8000/api/v1/market-data/capabilities`
 - Live quote snapshots: `GET http://127.0.0.1:8000/api/v1/market-data/quotes`
 - Historical candles: `GET http://127.0.0.1:8000/api/v1/market-data/candles`
+- Technical evidence: `GET http://127.0.0.1:8000/api/v1/technical-evidence?exchange=NSE&symbol=INFY&interval=15minute`
+- Instrument search: `GET http://127.0.0.1:8000/api/v1/instruments?q=infosys`
 
 Example quote request:
 
