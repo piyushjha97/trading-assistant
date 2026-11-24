@@ -14,7 +14,7 @@ The backend calls Kite for real provider data. It does not substitute synthetic 
 
 - Python 3.12 or newer.
 - A Kite API key and API secret for the owner's account. Keep these in the backend's local `.env`.
-- Set the Kite Connect application's registered redirect URL to `http://127.0.0.1:3000/api/kite/callback`. Use the same host and port to open the dashboard. If you change the frontend port, update both URLs.
+- Set the Kite Connect application's registered redirect URL to `http://127.0.0.1:3000/api/kite/callback`. If your app already redirects to `http://127.0.0.1:8000/`, the local backend forwards the callback to the dashboard on port 3000. Use `127.0.0.1` to open the dashboard so the callback can validate the sign-in state.
 
 Clone the repository and enter its directory, or open your existing local clone:
 

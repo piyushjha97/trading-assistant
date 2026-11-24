@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from trading_assistant.config import get_settings
@@ -33,6 +35,19 @@ def _as_http_error(error: KiteProviderError) -> HTTPException:
 @router.get("/api/v1/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/", include_in_schema=False)
+def dashboard_redirect(request: Request) -> RedirectResponse:
+    dashboard = "http://127.0.0.1:3000"
+    params = request.query_params
+    if "request_token" in params or params.get("action") == "login":
+        callback = {name: params[name] for name in ("request_token", "state", "status") if name in params}
+        dashboard += "/api/kite/callback?" + urlencode(callback)
+    return RedirectResponse(dashboard, status_code=303, headers={
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+    })
 
 
 @router.get("/api/v1/kite/login-url")

@@ -20,4 +20,4 @@ if [[ ! -x .venv/bin/python ]]; then
 fi
 
 .venv/bin/python -m pip install -e '.[dev]'
-exec .venv/bin/uvicorn trading_assistant.main:app --app-dir src --host 127.0.0.1 --port 8000
+exec .venv/bin/uvicorn trading_assistant.main:app --app-dir src --host 127.0.0.1 --port 8000 --no-access-log
