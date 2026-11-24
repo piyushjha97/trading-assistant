@@ -28,7 +28,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .skip-link { position: fixed; z-index: 5; top: 8px; left: 8px; background: var(--mint); color: var(--base); border-radius: 6px; padding: 10px; transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 .workspace { max-width: 1920px; margin: auto; min-height: 100vh; }
-.topbar { height: 68px; display: grid; grid-template-columns: 222px 1fr auto; align-items: center; padding: 0 28px 0 20px; gap: 18px; border-bottom: 1px solid var(--line); background: #11191a; }
+.topbar { position: sticky; top: 0; z-index: 4; height: 68px; display: grid; grid-template-columns: 222px 1fr auto; align-items: center; padding: 0 28px 0 20px; gap: 18px; border-bottom: 1px solid var(--line); background: #11191a; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 730; font-size: .97rem; width: fit-content; white-space: nowrap; }
 .brand-mark { width: 35px; height: 35px; border-radius: 11px; display: grid; place-items: center; background: var(--mint); color: #122921; }
 .top-nav { display: flex; align-items: stretch; align-self: stretch; gap: 26px; }
@@ -60,6 +60,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .watch-foot strong { color: var(--muted); }
 
 .workspace-main { min-width: 0; max-width: 1530px; width: 100%; margin-inline: auto; padding: 29px 28px 0; }
+#overview, #technicals, #context { scroll-margin-top: var(--section-scroll-clearance, 84px); }
 .workspace-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 21px; }
 .workspace-intro h1 { font-weight: 720; font-size: clamp(1.65rem, 2.5vw, 2.25rem); line-height: 1.13; letter-spacing: -.043em; }
 .workspace-intro p { color: var(--muted); margin-top: 6px; font-size: .94rem; }

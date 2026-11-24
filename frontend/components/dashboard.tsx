@@ -4,7 +4,7 @@ import {
   Activity, BarChart3, BellRing, CandlestickChart, ChartNoAxesCombined, CircleHelp,
   ClipboardList, Database, Globe2, Layers3, LoaderCircle, RefreshCw, Search, ShieldCheck, Sparkles,
 } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   horizonIntervals, intervals, marketDate, marketTime, price, quantity,
   stockPresets, symbolPattern, type Exchange, type Horizon, type Interval,
@@ -44,6 +44,13 @@ const contextPanels = [
 
 const blankResult: MarketResult = { quote: null, candles: null, issues: {} };
 const initialQuery: MarketQuery = { exchange: "NSE", symbol: "INFY", interval: "15minute" };
+const navigationSections = [
+  ["overview", "Overview"],
+  ["technicals", "Technicals"],
+  ["context", "Market context"],
+] as const;
+
+type NavigationSection = (typeof navigationSections)[number][0];
 
 export default function Dashboard() {
   const [query, setQuery] = useState(initialQuery);
@@ -52,8 +59,62 @@ export default function Dashboard() {
   const [result, setResult] = useState<MarketResult>(blankResult);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
-  const [navigation, setNavigation] = useState("overview");
+  const [navigation, setNavigation] = useState<NavigationSection>("overview");
+  const workspace = useRef<HTMLDivElement>(null);
+  const topbar = useRef<HTMLElement>(null);
   const currentRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const header = topbar.current;
+    const layout = workspace.current;
+    const technicals = document.getElementById("technicals");
+    const context = document.getElementById("context");
+    if (!header || !layout || !technicals || !context) return;
+
+    let technicalsStart = 0;
+    let contextStart = 0;
+
+    function updateActiveTab() {
+      // Allow for fractional anchor positions rounded by the browser.
+      const position = window.scrollY + 2;
+      setNavigation(position >= contextStart ? "context" :
+        position >= technicalsStart ? "technicals" : "overview");
+    }
+
+    const measureSections = () => {
+      const clearance = header.offsetHeight + 16;
+      const technicalsTop = technicals.getBoundingClientRect().top + window.scrollY;
+      const contextTop = context.getBoundingClientRect().top + window.scrollY;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const naturalContextStart = Math.max(0, contextTop - clearance);
+      // Keep both lower anchors reachable when the page is shorter than their offsets.
+      const scale = maxScroll > 0 && naturalContextStart > maxScroll
+        ? maxScroll / naturalContextStart : 1;
+      technicalsStart = Math.max(0, technicalsTop - clearance) * scale;
+      contextStart = naturalContextStart * scale;
+      technicals.style.scrollMarginTop = `${technicalsTop - technicalsStart}px`;
+      context.style.scrollMarginTop = `${contextTop - contextStart}px`;
+      layout.style.setProperty("--section-scroll-clearance", `${clearance}px`);
+      updateActiveTab();
+    };
+
+    measureSections();
+    const initialSection = window.location.hash;
+    if (initialSection === "#technicals" || initialSection === "#context") {
+      (initialSection === "#technicals" ? technicals : context).scrollIntoView({ behavior: "instant" });
+      updateActiveTab();
+    }
+    const resizeObserver = new ResizeObserver(measureSections);
+    resizeObserver.observe(layout);
+    resizeObserver.observe(header);
+    window.addEventListener("resize", measureSections);
+    window.addEventListener("scroll", updateActiveTab, { passive: true });
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", measureSections);
+      window.removeEventListener("scroll", updateActiveTab);
+    };
+  }, []);
 
   const preset = stockPresets.find((stock) => stock.symbol === query.symbol);
   const title = preset?.name ?? query.symbol;
@@ -118,16 +179,17 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="workspace">
+    <div className="workspace" ref={workspace}>
       <a className="skip-link" href="#overview">Skip to research workspace</a>
-      <header className="topbar">
+      <header className="topbar" ref={topbar}>
         <a className="brand" href="#overview" onClick={() => setNavigation("overview")}>
           <span className="brand-mark"><ChartNoAxesCombined size={21} strokeWidth={2.3} /></span>
           <span>Trading Assistant</span>
         </a>
         <nav aria-label="Workspace" className="top-nav">
-          {[["overview", "Overview"], ["technicals", "Technicals"], ["context", "Market context"]].map(([id, label]) => (
-            <a key={id} href={"#" + id} className={navigation === id ? "nav-active" : undefined} onClick={() => setNavigation(id)}>
+          {navigationSections.map(([id, label]) => (
+            <a key={id} href={"#" + id} className={navigation === id ? "nav-active" : undefined}
+              aria-current={navigation === id ? "location" : undefined} onClick={() => setNavigation(id)}>
               {label}
             </a>
           ))}
