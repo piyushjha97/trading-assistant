@@ -66,6 +66,26 @@ curl 'http://127.0.0.1:8000/api/v1/market-data/quotes?symbols=NSE%3AINFY&symbols
 
 Historical candle requests require the relevant Kite entitlement. The Postman collection is at [docs/postman/trading-assistant.postman_collection.json](docs/postman/trading-assistant.postman_collection.json).
 
+## Local analytics
+
+`analyze_closed_candles` in `trading_assistant.analytics` consumes normalized,
+chronologically ordered candles for one listing and interval. It returns the
+input range, latest OHLCV, and these indicators:
+
+| Signal | Default indicator |
+| --- | --- |
+| Trend direction | 20-bar SMA and EMA |
+| Momentum | 14-period Wilder RSI |
+| Volatility | 14-period Wilder ATR |
+| Trend strength | 14-period Wilder ADX, requiring 28 candles |
+| Trading participation | Latest volume divided by the mean of the previous 20 bars |
+| Breakout context | Highest high and lowest low of the previous 20 bars |
+
+Periods are configurable. Indicator values return `None` when warm-up is
+insufficient or the relative-volume baseline is zero. Relative volume uses a
+rolling baseline without adjusting for time of day. The caller supplies only
+closed candles after checking session coverage, freshness, and adjustment basis.
+
 ## Safety
 
 This backend does not implement application authentication. It binds to loopback for local development; do not change the host to expose it to a network or deploy it. Never commit `.env`, access tokens, API secrets, or other credentials.
