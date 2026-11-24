@@ -135,7 +135,7 @@ class KiteMarketDataProvider:
                     high=_decimal(record["high"]),
                     low=_decimal(record["low"]),
                     close=_decimal(record["close"]),
-                    volume=int(record.get("volume", 0)),
+                    volume=int(record["volume"]),
                     open_interest=(
                         int(record["oi"]) if record.get("oi") is not None else None
                     ),
