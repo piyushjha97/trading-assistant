@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from trading_assistant.api.instruments import router as instruments_router
+from trading_assistant.api.market_context import router as market_context_router
 from trading_assistant.api.routes import router
 from trading_assistant.api.technical import router as technical_router
 from trading_assistant.config import get_settings
@@ -32,6 +33,7 @@ app = FastAPI(
 app.include_router(router)
 app.include_router(instruments_router)
 app.include_router(technical_router)
+app.include_router(market_context_router)
 
 
 @app.exception_handler(KiteProviderError)

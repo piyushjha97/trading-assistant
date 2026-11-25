@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Literal, Protocol
 
@@ -8,6 +8,13 @@ from trading_assistant.market_context.contracts import ContextRequest, MarketCon
 from trading_assistant.market_data.candle_eligibility import select_completed_candles
 from trading_assistant.market_data.kite_provider import KiteProviderError
 from trading_assistant.market_data.models import CandleInterval, CandleResponse, Exchange
+
+
+_BAR_DURATION = {
+    CandleInterval.FIFTEEN_MINUTE: timedelta(minutes=15),
+    CandleInterval.SIXTY_MINUTE: timedelta(hours=1),
+    CandleInterval.DAY: timedelta(days=1),
+}
 
 
 class _CandleReader(Protocol):
@@ -33,12 +40,15 @@ class KiteMarketContextProvider:
         self,
         provider: _CandleReader,
         sector_by_listing: Mapping[tuple[Exchange, str], str] | None = None,
+        *,
+        stock_batch: CandleResponse | None = None,
     ) -> None:
         self._provider = provider
         self._sectors = dict(sector_by_listing or {})
+        self._stock_batch = stock_batch
 
     def fetch(self, request: ContextRequest) -> MarketContext:
-        stock = self._endpoints(request, request.exchange, request.symbol)
+        stock = self._endpoints(request, request.exchange, request.symbol, self._stock_batch)
         metrics: list[MarketMetric] = []
         gaps: list[str] = []
         if stock is None:
@@ -65,12 +75,18 @@ class KiteMarketContextProvider:
             status="unavailable" if not metrics else "partial" if gaps else "available",
         )
 
-    def _endpoints(self, request: ContextRequest, exchange: Exchange, symbol: str) -> _Endpoints | None:
+    def _endpoints(
+        self, request: ContextRequest, exchange: Exchange, symbol: str,
+        batch: CandleResponse | None = None,
+    ) -> _Endpoints | None:
         try:
-            batch = self._provider.candles(
-                exchange=exchange, symbol=symbol, interval=request.interval,
-                start=request.start_bar, end=request.end_bar,
-            )
+            if batch is None:
+                batch = self._provider.candles(
+                    exchange=exchange, symbol=symbol, interval=request.interval,
+                    start=request.start_bar,
+                    # Kite can omit the last bar when the window ends at its start.
+                    end=min(request.cutoff, request.end_bar + _BAR_DURATION[request.interval]),
+                )
             if (batch.exchange, batch.symbol, batch.interval) != (exchange, symbol, request.interval):
                 return None
             candles = select_completed_candles(batch.candles, request.interval, request.cutoff)
