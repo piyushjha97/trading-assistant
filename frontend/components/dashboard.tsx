@@ -10,7 +10,7 @@ import {
   symbolPattern, type Exchange, type Horizon, type Interval,
   type MarketQuery, type MarketResult,
 } from "../lib/market";
-import { loadMarketContext, type MarketContextState } from "../lib/market-context";
+import { loadCompanyNews, loadMarketContext, type CompanyNewsState, type MarketContextState } from "../lib/market-context";
 import { MarketContextPanel } from "./market-context";
 import { PriceChart } from "./price-chart";
 import { TechnicalEvidencePanel } from "./technical-evidence";
@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [input, setInput] = useState(initialQuery.symbol);
   const [horizon, setHorizon] = useState<Horizon>("Intraday");
   const [result, setResult] = useState<MarketResult>(blankResult);
+  const [news, setNews] = useState<CompanyNewsState>({ status: "idle" });
   const [context, setContext] = useState<MarketContextState>({ status: "idle" });
   const [technical, setTechnical] = useState<EvidenceState>({ status: "idle" });
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
@@ -133,11 +134,15 @@ export default function Dashboard() {
     setResult(blankResult);
     setTechnical({ status: "loading" });
     setContext({ status: "loading" });
+    setNews({ status: "loading" });
     setFormError("");
     setConnectionMessage("");
     setQuery(nextQuery);
     setInput(nextQuery.symbol);
     const params = new URLSearchParams({ ...nextQuery });
+    void loadCompanyNews(nextQuery.exchange, nextQuery.symbol, controller.signal).then((nextNews) => {
+      if (!controller.signal.aborted) setNews(nextNews);
+    });
     const technicalRequest = loadEvidence(params, controller.signal).then((evidence) => {
       if (!controller.signal.aborted) setTechnical(evidence);
     });
@@ -326,7 +331,7 @@ export default function Dashboard() {
                 </ul>
                 {issues.quote && issues.quote !== issues.candles && <p className="connection-note" role="status">{issues.quote}</p>}
                 {connectionMessage && <p className="connection-note" role="status">{connectionMessage}</p>}
-                {!loading && (result.kiteLoginRequired || (technical.status === "error" && technical.loginRequired) || (context.status === "error" && context.loginRequired) || !hasMarketData) && (
+                {!loading && (result.kiteLoginRequired || (technical.status === "error" && technical.loginRequired) || (context.status === "error" && context.loginRequired) || (news.status === "error" && news.loginRequired) || !hasMarketData) && (
                   <a className="kite-connect" href="/api/kite/login" onClick={() => {
                     const symbol = input.trim().toUpperCase();
                     window.sessionStorage.setItem("kite-market-query", new URLSearchParams({
@@ -346,7 +351,7 @@ export default function Dashboard() {
 
           <TechnicalEvidencePanel state={technical} interval={query.interval} />
 
-          <MarketContextPanel state={context} />
+          <MarketContextPanel state={context} news={news} />
           <div className="workspace-footer"><Activity size={15} /> Trading Assistant · Local research</div>
         </main>
       </div>

@@ -75,13 +75,39 @@ chart during a valid session. The chart is a REST snapshot with price and volume
 for the selected interval. The readouts beneath it use only bars eligible for
 technical analysis and show when the last bar used began. Search by stock name or symbol in
 the watchlist. The single watchlist is saved in the current browser.
+[Kite authentication](https://kite.trade/docs/connect/v3/user/)
 
 After loading a stock, Market context shows Nifty 50 and India VIX values
 and a sector comparison for listings with a configured sector index.
 Intraday comparisons use completed bars from the latest returned session.
-Daily comparisons use the latest two eligible daily bars. Catalysts, news,
-and fundamentals show their source availability.
-[Kite authentication](https://kite.trade/docs/connect/v3/user/)
+Daily comparisons use the latest two eligible daily bars. Company news shows
+linked headlines, publishers, and publication times. Official filings and
+fundamentals show their source availability.
+
+### Select a company news provider
+
+Hypeless's public feed is the default. Set the following values in the
+backend's ignored `.env` and restart to choose a different feed:
+
+| Setting | Behavior |
+| --- | --- |
+| `NEWS_PROVIDER=hypeless` | Use the public Hypeless feed. Set `HYPELESS_API_KEY` to use its authenticated news endpoint. |
+| `NEWS_PROVIDER=marketaux` | Use the Marketaux API. Set `MARKETAUX_API_TOKEN` to enable it. |
+| `NEWS_PROVIDER=disabled` | Disable news retrieval. |
+
+Both adapters implement `EventProvider.fetch(EventRequest) -> SourceResult`.
+To add a vendor, implement that interface and select the implementation in
+the FastAPI startup configuration. The market-context service and dashboard
+consume the same result type for every provider. News lookups are scoped
+to the selected company and limited to a vendor sample. An empty sample
+leaves coverage incomplete. The dashboard loads company news independently of
+benchmark and stock candle availability.
+
+The dashboard uses a live read. It includes only headlines published by the
+request cutoff and records when the backend observed them. The library's
+default point-in-time mode excludes items first observed after the cutoff.
+[Hypeless API](https://hypeless.in/developers) ·
+[Marketaux API](https://www.marketaux.com/documentation)
 
 ### Check the API
 

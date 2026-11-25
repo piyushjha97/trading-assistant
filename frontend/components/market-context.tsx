@@ -1,6 +1,6 @@
 import { BellRing, ClipboardList, Globe2, Layers3 } from "lucide-react";
 import { marketDate, marketTime, price } from "../lib/market";
-import type { MarketContextState } from "../lib/market-context";
+import type { CompanyNewsState, MarketContextState } from "../lib/market-context";
 
 const labels = {
   benchmark_return: "Benchmark return",
@@ -21,7 +21,41 @@ const gapLabels: Record<string, string> = {
 
 const units = { percent: "%", percentage_points: " pp", index_points: " pts" };
 
-export function MarketContextPanel({ state }: { state: MarketContextState }) {
+function NewsPanel({ state }: { state: CompanyNewsState }) {
+  const news = state.status === "loaded" ? state.news : undefined;
+  const loading = state.status === "loading";
+  let message = "Load a stock to see recent coverage.";
+  if (loading) message = "Loading company headlines.";
+  if (state.status === "error") message = state.message;
+  if (news?.status === "unavailable") message = "The news feed is temporarily unavailable.";
+  if (news?.status === "not_configured") message = "No news feed connected.";
+  if (news?.status === "empty") message = "No headlines found for this period.";
+  if (news?.status === "partial") message = news.items.length
+    ? "Recent company headlines · Limited coverage"
+    : "No matching headlines in the feed sample.";
+  if (news?.status === "available") message = "Recent company headlines.";
+
+  return (
+    <article className="panel context-panel" aria-busy={loading}>
+      <div className="context-panel-top"><BellRing size={20} /></div>
+      <h3>Company news</h3>
+      <p role="status">{message}</p>
+      {!!news?.items.length && (
+        <ul className="company-news">
+          {news.items.map((item) => (
+            <li key={`${item.source}:${item.record_id}`}>
+              <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+              <span>{item.source} · {marketDate(item.published_at)}, {marketTime(item.published_at)} IST</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p>Official filings and upcoming events have no feed connected.</p>
+    </article>
+  );
+}
+
+export function MarketContextPanel({ state, news }: { state: MarketContextState; news: CompanyNewsState }) {
   const snapshot = state.status === "loaded" ? state.snapshot : null;
   const metrics = snapshot?.market.metrics ?? [];
   let message = "Load market data to compare the stock with its benchmark and sector.";
@@ -54,11 +88,7 @@ export function MarketContextPanel({ state }: { state: MarketContextState }) {
           </ul>}
           {snapshot?.market.gaps.map((gap) => <p key={gap}>{gapLabels[gap] ?? gap}</p>)}
         </article>
-        <article className="panel context-panel">
-          <div className="context-panel-top"><BellRing size={20} /><span>No feed connected</span></div>
-          <h3>Catalysts &amp; news</h3>
-          <p>Company filings, earnings dates, and industry or macro news are currently unavailable.</p>
-        </article>
+        <NewsPanel state={news} />
         <article className="panel context-panel">
           <div className="context-panel-top"><Layers3 size={20} /><span>No feed connected</span></div>
           <h3>Fundamentals</h3>
