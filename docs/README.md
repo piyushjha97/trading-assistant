@@ -4,6 +4,7 @@
 
 - [Engineering Design Document v0.3](EDD-v0.3.md) is the current architecture baseline.
 - [Implementation plan](IMPLEMENTATION_PLAN.md) records the work sequence and acceptance checks.
+- [LLM-assisted buy signal design](LLM-SIGNAL-DESIGN.md) defines the candidate, model decision, risk checks and rollout.
 - [LLM evidence research](LLM-EVIDENCE-RESEARCH.md) compares source options and defines the proposed report input and validation flow.
 - [EDD v0.2](EDD-v0.2.md) and [architecture review materials](arch-review/) are retained as historical references.
 

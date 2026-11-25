@@ -62,17 +62,17 @@ The owner's quote check used the official `kiteconnect` client. Kite's [authenti
 
 **Done when:** the analysis result is useful and explainable without calling an LLM.
 
-## Phase 4 — LLM report
+## Phase 4 — LLM-assisted signal
 
 **Depends on:** Phase 3; an LLM choice and its data-handling terms; direction rules for the supported instrument and horizon.
 
-**Work:** Send only the structured evidence needed for one report to one LLM. Require typed output that refers to supplied evidence and candidate levels. Validate the result in Python and return WAIT/NO_TRADE when data or actionability checks fail.
+**Work:** Build the rules-only baseline first. Then send the permitted evidence and the eligible candidate ID to one model. Require a typed approve-or-abstain response and check it in Python. Finalize a BUY with Python-owned levels and expiry, or return NO_BUY with reason codes. Follow the [signal design and rollout](LLM-SIGNAL-DESIGN.md).
 
-**Deliverable:** a tested synchronous backend endpoint returns a validated report or a clear bounded error.
+**Deliverable:** a tested synchronous endpoint returns a validated long-only signal, a no-buy decision with reasons, or a bounded service error.
 
-**Acceptance check:** malformed, unsupported or invented model output is rejected or downgraded; invalid market data stops before the LLM call; duplicate requests do not cause duplicate paid model calls; no work continues in the background after a timeout.
+**Acceptance check:** malformed or invented model output is rejected. Invalid market data stops before inference. Equivalent in-flight requests share one paid model call. The request deadline bounds local work. Replay and shadow runs compare the model-assisted decision with the rules-only baseline on identical evidence.
 
-**Done when:** the report separates market data, computed evidence and LLM interpretation and records the versions used.
+**Done when:** mandatory gates, evidence and prices remain server-owned. Buy signals become eligible for release only after the replay, shadow and acceptance criteria in the signal design are met.
 
 ## Phase 5 — UI and end-to-end integration
 
