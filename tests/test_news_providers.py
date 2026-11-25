@@ -74,3 +74,34 @@ def test_provider_error_does_not_fail_snapshot(monkeypatch):
     snapshot = MarketContextService(news=hypeless.HypelessNewsProvider()).fetch(request_for(), live_news=True)
     assert snapshot.news.status == "unavailable"
     assert snapshot.catalysts.status == "not_configured"
+
+
+def test_company_news_endpoint_does_not_fetch_candles(monkeypatch):
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from trading_assistant.api.market_context import router
+    from trading_assistant.market_data.models import InstrumentListing
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.kite_provider = Mock()
+    app.state.kite_provider.search_instruments.return_value = [
+        InstrumentListing(exchange="NSE", symbol="INFY", name="Infosys"),
+    ]
+    app.state.news_provider = hypeless.HypelessNewsProvider()
+    published = datetime.now(timezone.utc) - timedelta(hours=1)
+    monkeypatch.setattr(hypeless, "fetch_object", lambda *args, **kwargs: {"stories": [{
+        "outlet": "Example Publisher", "headline": "Infosys files results",
+        "link": "https://example.org/results", "publishedAt": published.isoformat(),
+        "companies": ["Infosys"],
+    }]})
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/company-news?exchange=NSE&symbol=INFY")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["title"] == "Infosys files results"
+    app.state.kite_provider.candles.assert_not_called()

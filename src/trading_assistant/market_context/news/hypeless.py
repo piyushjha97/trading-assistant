@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from trading_assistant.market_context import ContextRequest, SourceItem, SourceResult, SourceUnavailable
+from trading_assistant.market_context import EventRequest, SourceItem, SourceResult, SourceUnavailable
 from trading_assistant.market_context.news.http import fetch_object
 
 
@@ -20,7 +20,7 @@ class HypelessNewsProvider:
     def __init__(self, api_key: str = "") -> None:
         self._api_key = api_key
 
-    def fetch(self, request: ContextRequest) -> SourceResult:
+    def fetch(self, request: EventRequest) -> SourceResult:
         if not request.company_name:
             return SourceResult(status="partial")
         company = _company_key(request.company_name)

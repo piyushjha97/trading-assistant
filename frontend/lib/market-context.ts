@@ -10,7 +10,6 @@ export interface CompanyNews {
 }
 
 interface MarketContextSnapshot {
-  news: CompanyNews;
   request: { interval: Interval; start_bar: string; end_bar: string };
   market: {
     status: "available" | "partial" | "unavailable" | "not_configured";
@@ -37,5 +36,22 @@ export async function loadMarketContext(params: URLSearchParams, signal: AbortSi
     return { status: "error", message: error, loginRequired: response.status === 401 };
   } catch {
     return { status: "error", message: "Market context is temporarily unavailable.", loginRequired: false };
+  }
+}
+
+export type CompanyNewsState =
+  | { status: "idle" | "loading" }
+  | { status: "loaded"; news: CompanyNews }
+  | { status: "error"; message: string; loginRequired: boolean };
+
+export async function loadCompanyNews(exchange: string, symbol: string, signal: AbortSignal): Promise<CompanyNewsState> {
+  try {
+    const params = new URLSearchParams({ exchange, symbol });
+    const response = await fetch("/api/company-news?" + params, { signal, cache: "no-store" });
+    if (response.ok) return { status: "loaded", news: await response.json() as CompanyNews };
+    const { error } = await response.json();
+    return { status: "error", message: error, loginRequired: response.status === 401 };
+  } catch {
+    return { status: "error", message: "Couldn’t load company news.", loginRequired: false };
   }
 }

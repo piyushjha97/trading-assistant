@@ -2,6 +2,7 @@ from trading_assistant.market_context.contracts import (
     ContextRequest,
     ContextSnapshot,
     EventProvider,
+    EventRequest,
     MarketContext,
     MarketProvider,
     SourceResult,
@@ -32,12 +33,15 @@ class MarketContextService:
             request=request,
             market=market,
             catalysts=_events(self._catalysts, request),
-            news=_events(self._news, request, live=live_news),
+            news=self.fetch_news(request, live=live_news),
         )
+
+    def fetch_news(self, request: EventRequest, *, live: bool = False) -> SourceResult:
+        return _events(self._news, request, live=live)
 
 
 def _events(
-    provider: EventProvider | None, request: ContextRequest, *, live: bool = False,
+    provider: EventProvider | None, request: EventRequest, *, live: bool = False,
 ) -> SourceResult:
     if provider is None:
         return SourceResult(status="not_configured")

@@ -95,12 +95,13 @@ backend's ignored `.env` and restart to choose a different feed:
 | `NEWS_PROVIDER=marketaux` | Use the Marketaux API. Set `MARKETAUX_API_TOKEN` to enable it. |
 | `NEWS_PROVIDER=disabled` | Disable news retrieval. |
 
-Both adapters implement `EventProvider.fetch(ContextRequest) -> SourceResult`.
+Both adapters implement `EventProvider.fetch(EventRequest) -> SourceResult`.
 To add a vendor, implement that interface and select the implementation in
 the FastAPI startup configuration. The market-context service and dashboard
 consume the same result type for every provider. News lookups are scoped
 to the selected company and limited to a vendor sample. An empty sample
-leaves coverage incomplete.
+leaves coverage incomplete. The dashboard loads company news independently of
+benchmark and stock candle availability.
 
 The dashboard uses a live read. It includes only headlines published by the
 request cutoff and records when the backend observed them. The library's

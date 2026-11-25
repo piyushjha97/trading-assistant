@@ -10,20 +10,29 @@ class _Record(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class ContextRequest(_Record):
+class EventRequest(_Record):
     exchange: Exchange
     symbol: str = Field(pattern=r"^[A-Z0-9&_-]{1,32}$")
-    interval: Literal[CandleInterval.FIFTEEN_MINUTE, CandleInterval.SIXTY_MINUTE, CandleInterval.DAY]
     company_name: str | None = None
-    start_bar: AwareDatetime
-    end_bar: AwareDatetime
     cutoff: AwareDatetime
     event_from: AwareDatetime
 
     @model_validator(mode="after")
+    def check_event_window(self) -> "EventRequest":
+        if self.event_from >= self.cutoff:
+            raise ValueError("The event window must start before the cutoff.")
+        return self
+
+
+class ContextRequest(EventRequest):
+    interval: Literal[CandleInterval.FIFTEEN_MINUTE, CandleInterval.SIXTY_MINUTE, CandleInterval.DAY]
+    start_bar: AwareDatetime
+    end_bar: AwareDatetime
+
+    @model_validator(mode="after")
     def check_window(self) -> "ContextRequest":
-        if not self.start_bar < self.end_bar < self.cutoff or self.event_from >= self.cutoff:
-            raise ValueError("Context requests require ordered bar starts and an event window before the cutoff.")
+        if not self.start_bar < self.end_bar < self.cutoff:
+            raise ValueError("Context requests require ordered bar starts before the cutoff.")
         return self
 
 
@@ -82,7 +91,7 @@ class MarketProvider(Protocol):
 
 
 class EventProvider(Protocol):
-    def fetch(self, request: ContextRequest) -> SourceResult:
+    def fetch(self, request: EventRequest) -> SourceResult:
         """Return scoped items and declare coverage for the requested window.
 
         Use 'empty' only for a successful, complete search with no matching items.

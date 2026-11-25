@@ -1,6 +1,6 @@
 import { BellRing, ClipboardList, Globe2, Layers3 } from "lucide-react";
 import { marketDate, marketTime, price } from "../lib/market";
-import type { CompanyNews, MarketContextState } from "../lib/market-context";
+import type { CompanyNewsState, MarketContextState } from "../lib/market-context";
 
 const labels = {
   benchmark_return: "Benchmark return",
@@ -21,10 +21,13 @@ const gapLabels: Record<string, string> = {
 
 const units = { percent: "%", percentage_points: " pp", index_points: " pts" };
 
-function NewsPanel({ news, loading, error }: { news?: CompanyNews; loading: boolean; error: boolean }) {
+function NewsPanel({ state }: { state: CompanyNewsState }) {
+  const news = state.status === "loaded" ? state.news : undefined;
+  const loading = state.status === "loading";
   let message = "Load a stock to see recent coverage.";
   if (loading) message = "Loading company headlines.";
-  if (error || news?.status === "unavailable") message = "The news feed is temporarily unavailable.";
+  if (state.status === "error") message = state.message;
+  if (news?.status === "unavailable") message = "The news feed is temporarily unavailable.";
   if (news?.status === "not_configured") message = "No news feed connected.";
   if (news?.status === "empty") message = "No headlines found for this period.";
   if (news?.status === "partial") message = news.items.length
@@ -52,7 +55,7 @@ function NewsPanel({ news, loading, error }: { news?: CompanyNews; loading: bool
   );
 }
 
-export function MarketContextPanel({ state }: { state: MarketContextState }) {
+export function MarketContextPanel({ state, news }: { state: MarketContextState; news: CompanyNewsState }) {
   const snapshot = state.status === "loaded" ? state.snapshot : null;
   const metrics = snapshot?.market.metrics ?? [];
   let message = "Load market data to compare the stock with its benchmark and sector.";
@@ -85,7 +88,7 @@ export function MarketContextPanel({ state }: { state: MarketContextState }) {
           </ul>}
           {snapshot?.market.gaps.map((gap) => <p key={gap}>{gapLabels[gap] ?? gap}</p>)}
         </article>
-        <NewsPanel news={snapshot?.news} loading={state.status === "loading"} error={state.status === "error"} />
+        <NewsPanel state={news} />
         <article className="panel context-panel">
           <div className="context-panel-top"><Layers3 size={20} /><span>No feed connected</span></div>
           <h3>Fundamentals</h3>

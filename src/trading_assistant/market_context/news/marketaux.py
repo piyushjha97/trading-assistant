@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from trading_assistant.market_context import ContextRequest, SourceItem, SourceResult, SourceUnavailable
+from trading_assistant.market_context import EventRequest, SourceItem, SourceResult, SourceUnavailable
 from trading_assistant.market_context.news.http import fetch_object
 from trading_assistant.market_data.models import Exchange
 
@@ -13,7 +13,7 @@ class MarketauxNewsProvider:
     def __init__(self, api_token: str) -> None:
         self._api_token = api_token
 
-    def fetch(self, request: ContextRequest) -> SourceResult:
+    def fetch(self, request: EventRequest) -> SourceResult:
         suffix = "NS" if request.exchange is Exchange.NSE else "BO"
         ticker = f"{request.symbol}.{suffix}"
         payload = fetch_object(

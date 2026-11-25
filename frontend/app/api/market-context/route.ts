@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   let response: Response;
   try {
     const url = localBackendUrl("/api/v1/market-context");
-    url.search = new URLSearchParams({ exchange, symbol, interval }).toString();
+    url.search = new URLSearchParams({ exchange, symbol, interval, include_news: "false" }).toString();
     response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, timeout]) });
   } catch {
     return timeout.aborted ? issue(504, "The market context request timed out.") :
