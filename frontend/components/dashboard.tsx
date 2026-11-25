@@ -1,25 +1,30 @@
 "use client";
 
 import {
-  Activity, BarChart3, BellRing, CandlestickChart, ChartNoAxesCombined, CircleHelp,
-  ClipboardList, Database, Globe2, Layers3, LoaderCircle, RefreshCw, Search, ShieldCheck, Sparkles,
+  Activity, BellRing, CandlestickChart, ChartNoAxesCombined, CircleHelp,
+  ClipboardList, Database, Globe2, Layers3, LoaderCircle, RefreshCw, Search, Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   horizonIntervals, intervals, marketDate, marketTime, price, quantity,
-  stockPresets, symbolPattern, type Exchange, type Horizon, type Interval,
+  symbolPattern, type Exchange, type Horizon, type Interval,
   type MarketQuery, type MarketResult,
 } from "../lib/market";
 import { PriceChart } from "./price-chart";
+import { TechnicalEvidencePanel } from "./technical-evidence";
+import type { EvidenceState, TechnicalEvidence } from "../lib/technical-evidence";
+import { Watchlist, type InstrumentResult } from "./watchlist";
 
-const studies = [
-  ["SMA + EMA", "Trend direction"],
-  ["Wilder RSI", "Momentum"],
-  ["Wilder ATR", "Volatility"],
-  ["Wilder ADX", "Trend strength"],
-  ["Relative volume", "Trading participation"],
-  ["Prior high / low", "Breakout context"],
-];
+async function loadEvidence(params: URLSearchParams, signal: AbortSignal): Promise<EvidenceState> {
+  try {
+    const response = await fetch("/api/technical-evidence?" + params, { signal, cache: "no-store" });
+    if (response.ok) return { status: "loaded", evidence: await response.json() as TechnicalEvidence };
+    const { error } = await response.json();
+    return { status: "error", message: error, loginRequired: response.status === 401 };
+  } catch {
+    return { status: "error", message: "Technical evidence is temporarily unavailable.", loginRequired: false };
+  }
+}
 
 const contextPanels = [
   {
@@ -62,6 +67,8 @@ export default function Dashboard() {
   const [input, setInput] = useState(initialQuery.symbol);
   const [horizon, setHorizon] = useState<Horizon>("Intraday");
   const [result, setResult] = useState<MarketResult>(blankResult);
+  const [technical, setTechnical] = useState<EvidenceState>({ status: "idle" });
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
@@ -122,11 +129,12 @@ export default function Dashboard() {
     };
   }, []);
 
-  const preset = stockPresets.find((stock) => stock.symbol === query.symbol);
-  const title = preset?.name ?? query.symbol;
+  const title = selectedInstrument?.symbol === query.symbol && selectedInstrument.exchange === query.exchange
+    ? selectedInstrument.name || query.symbol : query.symbol;
   const { quote, candles: batch, issues } = result;
   const candles = batch?.candles ?? [];
-  const rawQuoteTime = quote?.provider_timestamp ?? quote?.last_trade_time;
+  const lastChartBar = candles.at(-1);
+  const rawQuoteTime = quote?.last_trade_time ?? quote?.provider_timestamp;
   // Kite equity quote times can be supplied without a UTC offset. Interpret those as IST.
   const quoteTime = rawQuoteTime && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawQuoteTime) ? rawQuoteTime + "+05:30" : rawQuoteTime;
   const previousClose = Number(quote?.previous_close ?? 0);
@@ -141,13 +149,17 @@ export default function Dashboard() {
     currentRequest.current = controller;
     setLoading(true);
     setResult(blankResult);
+    setTechnical({ status: "loading" });
     setFormError("");
     setConnectionMessage("");
     setQuery(nextQuery);
     setInput(nextQuery.symbol);
+    const params = new URLSearchParams({ ...nextQuery });
+    void loadEvidence(params, controller.signal).then((evidence) => {
+      if (!controller.signal.aborted) setTechnical(evidence);
+    });
     try {
-      const url = new URLSearchParams({ ...nextQuery });
-      const response = await fetch("/api/market?" + url, { signal: controller.signal, cache: "no-store" });
+      const response = await fetch("/api/market?" + params, { signal: controller.signal, cache: "no-store" });
       const data = await response.json() as MarketResult | { error: string };
       if ("error" in data) throw new Error(data.error);
       if (!controller.signal.aborted) setResult(data);
@@ -196,6 +208,7 @@ export default function Dashboard() {
     currentRequest.current?.abort();
     setLoading(false);
     setResult(blankResult);
+    setTechnical({ status: "idle" });
     setQuery({ ...query, exchange });
   }
 
@@ -229,26 +242,10 @@ export default function Dashboard() {
       </header>
 
       <div className="workspace-layout">
-        <aside className="watchlist" aria-label="Stock shortcuts">
-          <div className="watchlist-heading"><span>Watchlist</span><span className="exchange-label">NSE</span></div>
-          <div className="watch-items">
-            {stockPresets.map((stock) => (
-              <button
-                key={stock.symbol}
-                className={"watch-stock" + (query.symbol === stock.symbol && query.exchange === "NSE" ? " watch-active" : "")}
-                aria-pressed={query.symbol === stock.symbol && query.exchange === "NSE"}
-                onClick={() => void loadMarket({ ...query, exchange: "NSE", symbol: stock.symbol })}
-              >
-                <span className={"stock-mark " + stock.color}>{stock.symbol.slice(0, 1)}</span>
-                <span className="watch-name"><b>{stock.symbol}</b><span>{stock.name}</span></span>
-              </button>
-            ))}
-          </div>
-          <div className="watch-foot">
-            <ShieldCheck size={18} />
-            <div><strong>Private workspace</strong><span>Research and analysis</span></div>
-          </div>
-        </aside>
+        <Watchlist selected={query} onSelect={(instrument) => {
+          setSelectedInstrument(instrument);
+          void loadMarket({ ...query, exchange: instrument.exchange, symbol: instrument.symbol });
+        }} />
 
         <main id="overview" className="workspace-main">
           <div className="workspace-intro">
@@ -293,7 +290,7 @@ export default function Dashboard() {
             <section className="panel chart-panel" aria-label="Price and volume chart">
               <div className="instrument-header">
                 <div className="instrument-summary">
-                  <span className={"instrument-mark stock-mark " + (preset?.color ?? "mint")}>{query.symbol[0]}</span>
+                  <span className="instrument-mark stock-mark mint">{query.symbol[0]}</span>
                   <div><div className="instrument-code">{query.exchange}:{query.symbol}</div><h2>{title}</h2></div>
                 </div>
                 <div className="quote">
@@ -307,7 +304,7 @@ export default function Dashboard() {
               </div>
 
               <div className="chart-toolbar">
-                <div className="chart-title"><CandlestickChart size={18} /><strong>Price &amp; volume</strong></div>
+                <div className="chart-title"><CandlestickChart size={18} /><strong>Price &amp; volume snapshot</strong></div>
                 <div className="segmented timeframe" role="group" aria-label="Chart interval">
                   {(Object.keys(intervals) as Interval[]).map((interval) => (
                     <button key={interval} type="button" aria-pressed={interval === query.interval}
@@ -326,7 +323,7 @@ export default function Dashboard() {
               </dl>
               <div className="chart-footer">
                 <span>{batch ? "Source: Zerodha Kite" : "Zerodha Kite · Market data"}</span>
-                <span>{candles.length ? candles.length + " bars · Latest bar may be forming" : "Chart times in IST"}</span>
+                <span>{lastChartBar ? `Last bar started ${marketDate(lastChartBar.timestamp)}${query.interval === "day" ? "" : `, ${marketTime(lastChartBar.timestamp)} IST`} · May be forming` : "Chart times in IST"}</span>
               </div>
             </section>
 
@@ -334,13 +331,13 @@ export default function Dashboard() {
               <section className="panel rail-panel" aria-live="polite">
                 <div className="panel-title"><Database size={18} /><h2>Data readiness</h2></div>
                 <ul className="readiness-list">
-                  <li><span className={quote ? "state-dot good" : issues.quote ? "state-dot failed" : "state-dot"} /><div><strong>Kite quote</strong><span>{quoteTime ? "As of " + marketDate(quoteTime) + ", " + marketTime(quoteTime) + " IST" : quote ? "Received · source time unavailable" : issues.quote ? "Unavailable" : loading ? "Fetching snapshot" : "Awaiting snapshot"}</span></div></li>
+                  <li><span className={quote ? "state-dot good" : issues.quote ? "state-dot failed" : "state-dot"} /><div><strong>Kite quote</strong><span>{quoteTime ? `${quote?.last_trade_time ? "Last traded" : "Quote timestamp"} ${marketDate(quoteTime)}, ${marketTime(quoteTime)} IST` : quote ? "Received · source time unavailable" : issues.quote ? "Unavailable" : loading ? "Fetching snapshot" : "Awaiting snapshot"}</span></div></li>
                   <li><span className={candles.length ? "state-dot good" : issues.candles ? "state-dot failed" : "state-dot"} /><div><strong>{intervals[query.interval].label} candles</strong><span>{batch?.candles.length ? "Fetched " + marketDate(batch.received_at) + ", " + marketTime(batch.received_at) + " IST" : issues.candles ? "Unavailable" : loading ? "Fetching candles" : "Awaiting candles"}</span></div></li>
-                  <li><span className="state-dot" /><div><strong>Evidence validation</strong><span>Awaiting analysis service</span></div></li>
+                  <li><span className={technical.status === "loaded" && technical.evidence.status === "ready" ? "state-dot good" : technical.status === "error" ? "state-dot failed" : "state-dot"} /><div><strong>Technical evidence</strong><span>{technical.status === "loaded" ? `${technical.evidence.snapshot.candle_count} eligible bars` : technical.status === "loading" ? "Calculating indicators" : technical.status === "error" ? "Unavailable" : "Awaiting data"}</span></div></li>
                 </ul>
                 {issues.quote && issues.quote !== issues.candles && <p className="connection-note" role="status">{issues.quote}</p>}
                 {connectionMessage && <p className="connection-note" role="status">{connectionMessage}</p>}
-                {!loading && (result.kiteLoginRequired || !hasMarketData) && (
+                {!loading && (result.kiteLoginRequired || (technical.status === "error" && technical.loginRequired) || !hasMarketData) && (
                   <a className="kite-connect" href="/api/kite/login" onClick={() => {
                     const symbol = input.trim().toUpperCase();
                     window.sessionStorage.setItem("kite-market-query", new URLSearchParams({
@@ -358,16 +355,7 @@ export default function Dashboard() {
             </aside>
           </div>
 
-          <section className="panel technical-panel" id="technicals">
-            <div className="section-title"><BarChart3 size={20} /><div><h2>Technical evidence</h2><p>Read each indicator alongside its timeframe and input data.</p></div><span className="pending-badge">Analysis service pending</span></div>
-            <div className="technical-grid">
-              {studies.map(([name, description]) => (
-                <div key={name} className="study">
-                  <span>{description}</span><strong>{name}</strong><span className="study-value" aria-label="Unavailable">—</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          <TechnicalEvidencePanel state={technical} interval={query.interval} />
 
           <section id="context" className="context-section">
             <div className="section-title context-title"><ClipboardList size={20} /><div><h2>Market context</h2><p>Review what could reinforce or invalidate the setup.</p></div></div>

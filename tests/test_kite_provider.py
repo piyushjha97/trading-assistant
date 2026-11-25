@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from kiteconnect.exceptions import GeneralException
 
 from trading_assistant.market_data.kite_provider import (
     KiteMarketDataProvider,
@@ -34,7 +35,7 @@ def test_quotes_normalize_kite_payload(provider: KiteMarketDataProvider) -> None
             "last_price": 1500.25,
             "volume": 100,
             "timestamp": None,
-            "last_trade_time": None,
+            "last_trade_time": datetime(2025, 1, 2, 15, 30),
             "ohlc": {"open": 1490, "high": 1510, "low": 1485, "close": 1488},
         }
     }
@@ -45,6 +46,7 @@ def test_quotes_normalize_kite_payload(provider: KiteMarketDataProvider) -> None
     assert result.quotes[0].last_price == Decimal("1500.25")
     assert result.quotes[0].previous_close == Decimal("1488")
     assert result.quotes[0].symbol == "INFY"
+    assert result.quotes[0].last_trade_time.isoformat() == "2025-01-02T15:30:00+05:30"
 
 
 def test_quotes_require_access_token(provider: KiteMarketDataProvider) -> None:
@@ -102,3 +104,11 @@ def test_unknown_symbol_returns_not_found(provider: KiteMarketDataProvider) -> N
 
     assert error.value.code == "instrument_not_found"
     assert error.value.status_code == 404
+
+
+def test_kite_throttling_preserves_http_status(provider: KiteMarketDataProvider) -> None:
+    provider._authenticated = True
+    provider._client.quote.side_effect = GeneralException("Too many requests", code=429)
+    with pytest.raises(KiteProviderError) as error:
+        provider.quotes(["NSE:INFY"])
+    assert error.value.status_code == 429

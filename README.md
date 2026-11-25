@@ -14,7 +14,7 @@ The backend calls Kite for real provider data. It does not substitute synthetic 
 
 - Python 3.12 or newer.
 - A Kite API key and API secret for the owner's account. Keep these in the backend's local `.env`.
-- Set the Kite Connect application's registered redirect URL to `http://127.0.0.1:3000/api/kite/callback`. Use the same host and port to open the dashboard. If you change the frontend port, update both URLs.
+- Set the Kite Connect application's registered redirect URL to `http://127.0.0.1:3000/api/kite/callback`. If your app already redirects to `http://127.0.0.1:8000/`, the local backend forwards the callback to the dashboard on port 3000. Use `127.0.0.1` to open the dashboard so the callback can validate the sign-in state.
 
 Clone the repository and enter its directory, or open your existing local clone:
 
@@ -71,7 +71,11 @@ one-time request token and stores the resulting access token in the ignored
 request after sign-in. The token works across refreshes and backend restarts
 until Kite expires it at 6:00 a.m. IST the next day or revokes it. Use **Load
 market data** and the interval buttons to refresh the candlestick and volume
-chart during a valid session. [Kite authentication](https://kite.trade/docs/connect/v3/user/)
+chart during a valid session. The chart is a REST snapshot with price and volume
+for the selected interval. The readouts beneath it use only bars eligible for
+technical analysis and show when the last bar used began. Search by stock name or symbol in
+the watchlist. The single watchlist is saved in the current browser.
+[Kite authentication](https://kite.trade/docs/connect/v3/user/)
 
 ### Check the API
 
@@ -80,6 +84,8 @@ chart during a valid session. [Kite authentication](https://kite.trade/docs/conn
 - Kite capabilities: `GET http://127.0.0.1:8000/api/v1/market-data/capabilities`
 - Live quote snapshots: `GET http://127.0.0.1:8000/api/v1/market-data/quotes`
 - Historical candles: `GET http://127.0.0.1:8000/api/v1/market-data/candles`
+- Technical evidence: `GET http://127.0.0.1:8000/api/v1/technical-evidence?exchange=NSE&symbol=INFY&interval=15minute`
+- Instrument search: `GET http://127.0.0.1:8000/api/v1/instruments?q=infosys`
 
 Example quote request:
 

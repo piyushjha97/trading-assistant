@@ -11,6 +11,24 @@ from trading_assistant.main import app
 from trading_assistant.market_data import kite_session
 
 
+def test_backend_root_forwards_kite_callback_to_dashboard() -> None:
+    response = TestClient(app, follow_redirects=False).get("/", params={
+        "request_token": "one-time-token",
+        "state": "a" * 64,
+        "status": "success",
+        "next": "https://example.com",
+    })
+    assert response.status_code == 303
+    target = urlsplit(response.headers["location"])
+    assert target.netloc == "127.0.0.1:3000"
+    assert target.path == "/api/kite/callback"
+    assert parse_qs(target.query) == {
+        "request_token": ["one-time-token"], "state": ["a" * 64], "status": ["success"],
+    }
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+
+
 def test_login_installs_and_persists_session(monkeypatch, tmp_path) -> None:
     path = tmp_path / ".secrets" / "kite-session.json"
     monkeypatch.setattr(kite_session, "_SESSION_PATH", path)

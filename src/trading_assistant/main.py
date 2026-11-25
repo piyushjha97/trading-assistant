@@ -5,7 +5,9 @@ from threading import Lock
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from trading_assistant.api.instruments import router as instruments_router
 from trading_assistant.api.routes import router
+from trading_assistant.api.technical import router as technical_router
 from trading_assistant.config import get_settings
 from trading_assistant.market_data.kite_provider import (
     KiteMarketDataProvider,
@@ -28,6 +30,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router)
+app.include_router(instruments_router)
+app.include_router(technical_router)
 
 
 @app.exception_handler(KiteProviderError)

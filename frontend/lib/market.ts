@@ -13,13 +13,6 @@ export const horizonIntervals: Record<Horizon, Interval> = {
   Swing: "day",
 };
 
-export const stockPresets = [
-  { symbol: "INFY", name: "Infosys", sector: "Information technology", color: "mint" },
-  { symbol: "RELIANCE", name: "Reliance Industries", sector: "Diversified", color: "violet" },
-  { symbol: "HDFCBANK", name: "HDFC Bank", sector: "Financial services", color: "blue" },
-  { symbol: "TCS", name: "Tata Consultancy Services", sector: "Information technology", color: "amber" },
-] as const;
-
 export interface MarketQuery {
   exchange: Exchange;
   symbol: string;
