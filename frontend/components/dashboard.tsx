@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Activity, BellRing, CandlestickChart, ChartNoAxesCombined, CircleHelp,
-  ClipboardList, Database, Globe2, Layers3, LoaderCircle, RefreshCw, Search, Sparkles,
+  Activity, CandlestickChart, ChartNoAxesCombined, CircleHelp,
+  Database, LoaderCircle, RefreshCw, Search, Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -10,6 +10,8 @@ import {
   symbolPattern, type Exchange, type Horizon, type Interval,
   type MarketQuery, type MarketResult,
 } from "../lib/market";
+import { loadMarketContext, type MarketContextState } from "../lib/market-context";
+import { MarketContextPanel } from "./market-context";
 import { PriceChart } from "./price-chart";
 import { TechnicalEvidencePanel } from "./technical-evidence";
 import type { EvidenceState, TechnicalEvidence } from "../lib/technical-evidence";
@@ -25,27 +27,6 @@ async function loadEvidence(params: URLSearchParams, signal: AbortSignal): Promi
     return { status: "error", message: "Technical evidence is temporarily unavailable.", loginRequired: false };
   }
 }
-
-const contextPanels = [
-  {
-    title: "Market & sector",
-    icon: Globe2,
-    text: "Compare the stock with its benchmark and sector at the same market cutoff.",
-    items: ["Benchmark return", "Sector relative strength", "Market volatility"],
-  },
-  {
-    title: "Catalysts",
-    icon: BellRing,
-    text: "A timeline for company filings, upcoming events, and relevant industry news.",
-    items: ["Company filings", "Earnings calendar", "Industry & macro news"],
-  },
-  {
-    title: "Fundamentals",
-    icon: Layers3,
-    text: "Company context for swing research and exposure around scheduled results.",
-    items: ["Latest results", "Recent corporate actions", "Balance sheet context"],
-  },
-];
 
 const blankResult: MarketResult = { quote: null, candles: null, issues: {} };
 const initialQuery: MarketQuery = { exchange: "NSE", symbol: "INFY", interval: "15minute" };
@@ -67,6 +48,7 @@ export default function Dashboard() {
   const [input, setInput] = useState(initialQuery.symbol);
   const [horizon, setHorizon] = useState<Horizon>("Intraday");
   const [result, setResult] = useState<MarketResult>(blankResult);
+  const [context, setContext] = useState<MarketContextState>({ status: "idle" });
   const [technical, setTechnical] = useState<EvidenceState>({ status: "idle" });
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,12 +132,13 @@ export default function Dashboard() {
     setLoading(true);
     setResult(blankResult);
     setTechnical({ status: "loading" });
+    setContext({ status: "loading" });
     setFormError("");
     setConnectionMessage("");
     setQuery(nextQuery);
     setInput(nextQuery.symbol);
     const params = new URLSearchParams({ ...nextQuery });
-    void loadEvidence(params, controller.signal).then((evidence) => {
+    const technicalRequest = loadEvidence(params, controller.signal).then((evidence) => {
       if (!controller.signal.aborted) setTechnical(evidence);
     });
     try {
@@ -170,6 +153,12 @@ export default function Dashboard() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
+
+    // Let the foreground candle requests finish before querying other Kite instruments.
+    await technicalRequest;
+    if (controller.signal.aborted) return;
+    const nextContext = await loadMarketContext(params, controller.signal);
+    if (!controller.signal.aborted) setContext(nextContext);
   }, []);
 
   useEffect(() => {
@@ -337,7 +326,7 @@ export default function Dashboard() {
                 </ul>
                 {issues.quote && issues.quote !== issues.candles && <p className="connection-note" role="status">{issues.quote}</p>}
                 {connectionMessage && <p className="connection-note" role="status">{connectionMessage}</p>}
-                {!loading && (result.kiteLoginRequired || (technical.status === "error" && technical.loginRequired) || !hasMarketData) && (
+                {!loading && (result.kiteLoginRequired || (technical.status === "error" && technical.loginRequired) || (context.status === "error" && context.loginRequired) || !hasMarketData) && (
                   <a className="kite-connect" href="/api/kite/login" onClick={() => {
                     const symbol = input.trim().toUpperCase();
                     window.sessionStorage.setItem("kite-market-query", new URLSearchParams({
@@ -357,18 +346,7 @@ export default function Dashboard() {
 
           <TechnicalEvidencePanel state={technical} interval={query.interval} />
 
-          <section id="context" className="context-section">
-            <div className="section-title context-title"><ClipboardList size={20} /><div><h2>Market context</h2><p>Review what could reinforce or invalidate the setup.</p></div></div>
-            <div className="context-grid">
-              {contextPanels.map(({ title, icon: Icon, text, items }) => (
-                <article className="panel context-panel" key={title}>
-                  <div className="context-panel-top"><Icon size={20} /><span>Source pending</span></div>
-                  <h3>{title}</h3><p>{text}</p>
-                  <ul>{items.map((item) => <li key={item}>{item}<span>—</span></li>)}</ul>
-                </article>
-              ))}
-            </div>
-          </section>
+          <MarketContextPanel state={context} />
           <div className="workspace-footer"><Activity size={15} /> Trading Assistant · Local research</div>
         </main>
       </div>

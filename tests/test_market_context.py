@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import Mock
 from zoneinfo import ZoneInfo
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from trading_assistant.api.market_context import router
 
 from trading_assistant.market_context import (
     ContextRequest,
@@ -28,10 +34,12 @@ class _Candles:
 
     def candles(self, exchange, symbol, interval, start, end):
         change = {"INFY": 3, "NIFTY 50": 1, "NIFTY IT": 2, "INDIA VIX": 4}[symbol]
+        last = start + timedelta(minutes=15)
         candles = [
             Candle(timestamp=timestamp, open=value, high=value, low=value, close=value, volume=0)
-            for timestamp, value in [(start, 100), (end, 100 + change)]
-            if not (self.missing_sector and symbol == "NIFTY IT" and timestamp == end)
+            for timestamp, value in [(start, 100), (last, 100 + change)]
+            if timestamp < end
+            if not (self.missing_sector and symbol == "NIFTY IT" and timestamp == last)
         ]
         return CandleResponse(
             exchange=exchange, symbol=symbol, interval=interval, requested_from=start,
@@ -89,3 +97,33 @@ def test_swappable_event_providers_preserve_cutoff_and_independent_failures() ->
     assert snapshot.catalysts.status == "available"
     assert [item.title for item in snapshot.catalysts.items] == ["Updated schedule"]
     assert snapshot.news.status == "unavailable"
+
+
+def test_context_api_selects_latest_session_and_reuses_stock_batch() -> None:
+    candles = _Candles()
+    provider = Mock()
+
+    def read(exchange, symbol, interval, start, end):
+        if symbol != "INFY":
+            return candles.candles(exchange, symbol, interval, start, end)
+        latest_start = start.astimezone(ZoneInfo("Asia/Kolkata")).replace(hour=9, minute=15, second=0, microsecond=0)
+        latest_end = latest_start + timedelta(minutes=15)
+        result = candles.candles(exchange, symbol, interval, latest_start, latest_end + timedelta(minutes=1))
+        earlier = result.candles[0].model_copy(update={"timestamp": latest_start - timedelta(days=1)})
+        return result.model_copy(update={"candles": [earlier, *result.candles]})
+
+    provider.candles.side_effect = read
+    app = FastAPI()
+    app.state.kite_provider = provider
+    app.include_router(router)
+    with TestClient(app) as client:
+        response = client.get("/api/v1/market-context?exchange=NSE&symbol=INFY")
+    assert response.status_code == 200
+    payload = response.json()
+    first = datetime.fromisoformat(payload["request"]["start_bar"])
+    last = datetime.fromisoformat(payload["request"]["end_bar"])
+    assert first.hour == 9 and first.minute == 15
+    assert last - first == timedelta(minutes=15)
+    assert len(payload["market"]["metrics"]) == 6
+    assert payload["catalysts"]["status"] == "not_configured"
+    assert sum(call.kwargs["symbol"] == "INFY" for call in provider.candles.call_args_list) == 1

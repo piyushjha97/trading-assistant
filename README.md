@@ -75,6 +75,12 @@ chart during a valid session. The chart is a REST snapshot with price and volume
 for the selected interval. The readouts beneath it use only bars eligible for
 technical analysis and show when the last bar used began. Search by stock name or symbol in
 the watchlist. The single watchlist is saved in the current browser.
+
+After loading a stock, Market context shows Nifty 50 and India VIX values
+and a sector comparison for listings with a configured sector index.
+Intraday comparisons use completed bars from the latest returned session.
+Daily comparisons use the latest two eligible daily bars. Catalysts, news,
+and fundamentals show their source availability.
 [Kite authentication](https://kite.trade/docs/connect/v3/user/)
 
 ### Check the API
