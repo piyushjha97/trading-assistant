@@ -14,6 +14,7 @@ class ContextRequest(_Record):
     exchange: Exchange
     symbol: str = Field(pattern=r"^[A-Z0-9&_-]{1,32}$")
     interval: Literal[CandleInterval.FIFTEEN_MINUTE, CandleInterval.SIXTY_MINUTE, CandleInterval.DAY]
+    company_name: str | None = None
     start_bar: AwareDatetime
     end_bar: AwareDatetime
     cutoff: AwareDatetime
@@ -60,6 +61,7 @@ class SourceItem(_Record):
 
 
 class SourceResult(_Record):
+    observed_at: AwareDatetime | None = None
     status: Literal["available", "empty", "partial", "unavailable", "not_configured"]
     items: tuple[SourceItem, ...] = ()
 

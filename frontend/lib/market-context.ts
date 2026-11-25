@@ -4,7 +4,13 @@ type MetricKind =
   | "benchmark_return" | "stock_vs_benchmark"
   | "sector_return" | "stock_vs_sector" | "vix_level" | "vix_change";
 
+export interface CompanyNews {
+  status: "available" | "partial" | "empty" | "unavailable" | "not_configured";
+  items: { source: string; record_id: string; title: string; published_at: string; url: string }[];
+}
+
 interface MarketContextSnapshot {
+  news: CompanyNews;
   request: { interval: Interval; start_bar: string; end_bar: string };
   market: {
     status: "available" | "partial" | "unavailable" | "not_configured";

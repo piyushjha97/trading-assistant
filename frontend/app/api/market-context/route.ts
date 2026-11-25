@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return issue(400, "Choose a valid exchange, symbol, and interval.");
   }
 
-  const timeout = AbortSignal.timeout(42_000);
+  const timeout = AbortSignal.timeout(48_000);
   let response: Response;
   try {
     const url = localBackendUrl("/api/v1/market-context");
