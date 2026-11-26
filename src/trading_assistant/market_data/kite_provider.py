@@ -29,6 +29,7 @@ class _CatalogInstrument:
     token: int
     name: str
     instrument_type: str
+    tick_size: Decimal | None
 
 
 class KiteProviderError(Exception):
@@ -113,6 +114,11 @@ class KiteMarketDataProvider:
             InstrumentListing(exchange=venue, symbol=symbol, name=name)
             for _, symbol, venue, name in matches[:limit]
         ]
+
+    def equity_tick_size(self, exchange: Exchange, symbol: str) -> Decimal | None:
+        client = self._authenticated_client()
+        instrument = self._instruments(client, exchange).get(symbol)
+        return instrument.tick_size if instrument is not None and instrument.instrument_type == "EQ" else None
 
     def quotes(self, symbols: list[str]) -> QuoteResponse:
         client = self._authenticated_client()
@@ -233,6 +239,7 @@ class KiteMarketDataProvider:
                         token=int(item["instrument_token"]),
                         name=str(item.get("name") or item["tradingsymbol"]),
                         instrument_type=item.get("instrument_type", ""),
+                        tick_size=_decimal(item.get("tick_size")),
                     )
                     for item in instruments
                     if isinstance(item.get("tradingsymbol"), str)

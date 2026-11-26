@@ -3,20 +3,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from trading_assistant.analytics.technical_evidence import TechnicalInterval
-from trading_assistant.market_context import ContextRequest, ContextSnapshot, EventRequest, MarketContextService, SourceResult
+from trading_assistant.market_context import ContextSnapshot, EventRequest, MarketContextService, SourceResult
 from trading_assistant.market_context.kite import KiteMarketContextProvider
-from trading_assistant.market_data.candle_eligibility import MARKET_TIMEZONE, select_completed_candles
+from trading_assistant.market_context.window import SECTOR_BY_LISTING, comparison_window
 from trading_assistant.market_data.kite_provider import KiteProviderError
 from trading_assistant.market_data.models import CandleInterval, Exchange
 
 router = APIRouter()
-
-_SECTORS = {
-    (exchange, symbol): "NIFTY IT"
-    for exchange in Exchange
-    for symbol in ("INFY", "TCS", "WIPRO", "HCLTECH", "TECHM", "LTIM")
-}
-
 
 @router.get("/api/v1/market-context", response_model=ContextSnapshot)
 def market_context(
@@ -35,18 +28,6 @@ def market_context(
         exchange=exchange, symbol=symbol, interval=candle_interval,
         start=cutoff - timedelta(days=14), end=cutoff,
     )
-    try:
-        stamps = sorted({bar.timestamp for bar in select_completed_candles(batch.candles, candle_interval, cutoff)})
-    except ValueError:
-        raise HTTPException(status_code=502, detail="Kite returned invalid timestamps for market context.") from None
-
-    if stamps and candle_interval != CandleInterval.DAY:
-        latest_session = stamps[-1].astimezone(MARKET_TIMEZONE).date()
-        stamps = [stamp for stamp in stamps if stamp.astimezone(MARKET_TIMEZONE).date() == latest_session]
-    if len(stamps) < 2:
-        raise HTTPException(status_code=422, detail="Market context needs two completed stock bars in the comparison window.")
-
-    first = stamps[-2] if candle_interval == CandleInterval.DAY else stamps[0]
     news = getattr(request.app.state, "news_provider", None) if include_news else None
     company_name = None
     if news is not None:
@@ -54,11 +35,13 @@ def market_context(
             company_name = _company_name(request, exchange, symbol)
         except KiteProviderError:
             pass
-    context_request = ContextRequest(
-        exchange=exchange, symbol=symbol, interval=candle_interval, company_name=company_name,
-        start_bar=first, end_bar=stamps[-1], cutoff=cutoff, event_from=cutoff - timedelta(days=7),
-    )
-    market = KiteMarketContextProvider(provider, _SECTORS, stock_batch=batch)
+    try:
+        context_request = comparison_window(batch, cutoff, company_name=company_name)
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Kite returned invalid timestamps for market context.") from None
+    if context_request is None:
+        raise HTTPException(status_code=422, detail="Market context needs two completed stock bars in the comparison window.")
+    market = KiteMarketContextProvider(provider, SECTOR_BY_LISTING, stock_batch=batch)
     response.headers["Cache-Control"] = "no-store"
     return MarketContextService(market=market, news=news).fetch(context_request, live_news=True)
 

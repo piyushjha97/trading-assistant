@@ -212,3 +212,14 @@ select { padding: 0 30px 0 10px; width: 100%; appearance: none; background-image
 
 .context-panel .company-news li { display: grid; gap: 4px; }
 .company-news a { color: inherit; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+
+.paper-button { align-self: flex-start; }
+.paper-signal-result { margin-top: 12px; }
+.paper-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 10px; }
+.paper-details dt { color: var(--muted); font-size: .8rem; }
+.paper-details dd { margin: 0; font-variant-numeric: tabular-nums; }
+.paper-history { margin: 0; padding: 0; list-style: none; }
+.paper-history li { border-top: 1px solid var(--line); padding: 12px 0; }
+.paper-history p { color: var(--muted); margin: 6px 0; }
+.paper-trade-heading { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.paper-trade-heading .kite-connect { margin: 0; }

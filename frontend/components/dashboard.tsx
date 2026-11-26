@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Activity, CandlestickChart, ChartNoAxesCombined, CircleHelp,
-  Database, LoaderCircle, RefreshCw, Search, Sparkles,
+  Activity, CandlestickChart, ChartNoAxesCombined,
+  Database, LoaderCircle, RefreshCw, Search,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../lib/market";
 import { loadCompanyNews, loadMarketContext, type CompanyNewsState, type MarketContextState } from "../lib/market-context";
 import { MarketContextPanel } from "./market-context";
+import { PaperTradeHistory, SignalPanel } from "./paper-trading";
 import { PriceChart } from "./price-chart";
 import { TechnicalEvidencePanel } from "./technical-evidence";
 import type { EvidenceState, TechnicalEvidence } from "../lib/technical-evidence";
@@ -44,6 +45,7 @@ const kiteMessages: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const [paperRevision, setPaperRevision] = useState(0);
   const [query, setQuery] = useState(initialQuery);
   const [input, setInput] = useState(initialQuery.symbol);
   const [horizon, setHorizon] = useState<Horizon>("Intraday");
@@ -340,18 +342,15 @@ export default function Dashboard() {
                   }}>Connect Kite</a>
                 )}
               </section>
-              <section className="panel rail-panel brief-panel">
-                <div className="brief-icon"><Sparkles size={19} /></div>
-                <h2>AI research brief</h2>
-                <p>Review the setup, conflicting signals, and reasons to wait once the analysis service is connected.</p>
-                <div className="brief-state"><CircleHelp size={15} /> Awaiting validated evidence</div>
-              </section>
+              <SignalPanel key={`${query.exchange}:${query.symbol}`} exchange={query.exchange} symbol={query.symbol}
+                onRegistered={() => setPaperRevision((revision) => revision + 1)} />
             </aside>
           </div>
 
           <TechnicalEvidencePanel state={technical} interval={query.interval} />
 
           <MarketContextPanel state={context} news={news} />
+          <PaperTradeHistory revision={paperRevision} />
           <div className="workspace-footer"><Activity size={15} /> Trading Assistant · Local research</div>
         </main>
       </div>

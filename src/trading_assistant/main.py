@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from collections.abc import AsyncIterator
 from threading import Lock
 
@@ -8,8 +9,11 @@ from fastapi.responses import JSONResponse
 from trading_assistant.api.instruments import router as instruments_router
 from trading_assistant.api.market_context import router as market_context_router
 from trading_assistant.api.routes import router
+from trading_assistant.api.signals import router as signals_router
 from trading_assistant.api.technical import router as technical_router
 from trading_assistant.config import get_settings
+from trading_assistant.llm.signal import NoOpSignalModel
+from trading_assistant.paper_trading import JsonPaperTradeStore, PaperTradeTracker
 from trading_assistant.market_context.news.hypeless import HypelessNewsProvider
 from trading_assistant.market_context.news.marketaux import MarketauxNewsProvider
 from trading_assistant.market_data.kite_provider import (
@@ -29,6 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     elif settings.news_provider == "marketaux" and settings.marketaux_api_token.get_secret_value():
         app.state.news_provider = MarketauxNewsProvider(settings.marketaux_api_token.get_secret_value())
     app.state.kite_session_lock = Lock()
+    app.state.signal_model = NoOpSignalModel()
+    app.state.paper_tracker = PaperTradeTracker(JsonPaperTradeStore(Path(".cache/paper-trades.json")))
     yield
 
 
@@ -42,6 +48,7 @@ app.include_router(router)
 app.include_router(instruments_router)
 app.include_router(technical_router)
 app.include_router(market_context_router)
+app.include_router(signals_router)
 
 
 @app.exception_handler(KiteProviderError)
