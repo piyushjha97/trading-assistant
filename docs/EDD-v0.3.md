@@ -25,7 +25,7 @@ The broader product direction is a hosted, private owner application. Access by 
 | Data storage | The application may save fetched candles with the associated analysis for the owner's local reports and charts. Public redistribution is outside the current scope. |
 | Analytics | Deterministic, testable calculations implemented in Python. |
 | Evaluation | Explicit, explainable rules and named gates determine bias, actionability, and verdict. |
-| AI | Optional agent and LLM capabilities add qualitative context and explanations. They do not invent market facts or bypass mandatory deterministic gates. |
+| AI | An optional LLM assesses a prevalidated candidate and explains the evidence. Python owns eligibility, prices and the public signal. See [LLM-assisted buy signal design](LLM-SIGNAL-DESIGN.md). |
 | Chat | Report-scoped and uses the same data and analysis services as the dashboard. |
 | UI | React and TypeScript remain provisional choices. |
 | Persistence | PostgreSQL remains provisional for the hosted application. |
@@ -39,17 +39,17 @@ The analysis API is the entry point for the UI. It coordinates the request; the 
 ~~~mermaid
 flowchart LR
     UI[UI] -->|Analysis request| API[Analysis API]
-    API -->|Request parameters| DATA[Market data module]
-    DATA --> KITE[Kite REST API]
-    DATA --> SENT[Future sentiment sources]
-    KITE --> NORMALIZE[Normalize and validate data]
-    SENT --> NORMALIZE
-    NORMALIZE -->|Candles and numeric context| ANALYTICS[Analytics engine]
-    NORMALIZE -->|Sourced text and market context| AGENTS[AI research agents]
-    ANALYTICS -->|Technical and sentiment features| EVALUATION[Evaluation engine]
-    AGENTS -->|Attributed qualitative evidence| EVALUATION
-    EVALUATION -->|Gates, bias, actionability, verdict| AI[AI report and chat services]
-    AI -->|Structured analysis result| API
+    API --> DATA[Market data module and Kite REST API]
+    API --> CTX[Market context and event providers]
+    DATA --> NORMALIZE[Normalize and validate data]
+    NORMALIZE --> ANALYTICS[Analytics engine]
+    ANALYTICS --> SNAPSHOT[Versioned evidence snapshot]
+    CTX --> SNAPSHOT
+    SNAPSHOT --> EVALUATION[Deterministic evaluation and candidate levels]
+    EVALUATION --> MODEL[Optional model assessment]
+    EVALUATION --> FINAL[Signal validation and finalizer]
+    MODEL --> FINAL
+    FINAL --> API
     API -->|JSON response| UI
 
     UI -->|Follow-up question| CHATAPI[Chat API]
@@ -71,6 +71,7 @@ The diagram shows logical module boundaries, not network hops. Modules exchange 
 | **Analytics engine** | Calculates technical indicators and measurable sentiment features from validated, timestamped inputs. It does not choose a trade verdict. |
 | **Evaluation engine** | Applies versioned deterministic rules and gates to analytics evidence and any explicitly allowed qualitative evidence. Produces bias, actionability, verdict, candidate levels, and reasons. |
 | **AI research agents** | May retrieve and summarize approved sources as attributed qualitative evidence. Their output is identified as model-generated and enters evaluation only through explicit rules. |
+| **Signal model and finalizer** | The model assesses an eligible candidate and cites its evidence. The Python finalizer checks the response and returns the signal with rules-owned prices. |
 | **AI report and chat services** | Explain a completed result and answer bounded, report-scoped follow-up questions using shared application services. |
 | **Chat API** | Supplies report context and routes permitted read-only questions through the shared application services. |
 
@@ -83,7 +84,7 @@ The diagram shows logical module boundaries, not network hops. Modules exchange 
 5. The analytics engine calculates requested indicators and returns typed values with their parameters, source range, and evidence references.
 6. The evaluation engine checks data sufficiency and applies explicit rules. It may return LONG, SHORT, WAIT, or NO_TRADE, with named gate results and reasons.
 7. Optional research agents may return attributed qualitative evidence; the evaluation engine uses it only where an explicit rule allows it. The deterministic gates remain authoritative for data quality, eligibility, and risk.
-8. The AI report service may explain the structured result. The API returns the result, data timestamps, provenance, and warnings to the UI. The application can persist the report and its candle input for the owner's history and chart replay.
+8. For the initial long-only signal, an enabled model can approve or abstain on a prevalidated candidate. The Python finalizer validates the response and returns BUY with entry, target, stop and expiry, or NO_BUY with reasons. The API attaches evidence and timestamps. The application can persist the report and its permitted inputs for the owner's history and chart replay. See the [signal design](LLM-SIGNAL-DESIGN.md) for hard gates, shadow mode and rollout.
 
 A live quote is optional for a candle-based analysis. Indicator calculations use completed candles by default; an incomplete current candle must be identified and handled explicitly.
 

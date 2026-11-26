@@ -84,6 +84,8 @@ Use separate bounded deadlines for market and optional source calls and reuse an
 
 ## Model contract and report flow
 
+This section describes the evidence and explanation layer. The [buy signal design](LLM-SIGNAL-DESIGN.md) adds bounded model approval or abstention and a Python finalizer for actionable signals.
+
 ```mermaid
 flowchart TD
     EVAL["Validated evidence and deterministic result"] --> MIN{"Mandatory evidence valid?"}
